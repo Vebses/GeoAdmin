@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/auth/logout-button';
+import type { User } from '@/types';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -11,11 +12,13 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  const { data: userProfile } = await supabase
+  const { data } = await supabase
     .from('users')
     .select('*')
     .eq('id', user.id)
     .single();
+  
+  const userProfile = data as User | null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
