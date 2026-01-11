@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CaseActionsEditor } from './case-actions-editor';
+import { CaseDocuments } from './case-documents';
 import { caseSchema, type CaseFormData } from '@/lib/utils/validation';
 import { caseStatusOptions } from './case-status-badge';
 import type { Case, Partner, User as UserType } from '@/types';
@@ -147,6 +149,8 @@ export function CaseEditPanel({
             <TabsTrigger value="details">ქეისის დეტალები</TabsTrigger>
             <TabsTrigger value="patient">პაციენტი</TabsTrigger>
             <TabsTrigger value="medical">სამედიცინო</TabsTrigger>
+            {isEdit && <TabsTrigger value="actions">მოქმედებები</TabsTrigger>}
+            {isEdit && <TabsTrigger value="documents">დოკუმენტები</TabsTrigger>}
           </TabsList>
 
           {/* Tab 1: Case Details */}
@@ -422,6 +426,20 @@ export function CaseEditPanel({
               </>
             )}
           </TabsContent>
+
+          {/* Tab 4: Actions (only in edit mode) */}
+          {isEdit && caseData && (
+            <TabsContent value="actions" className="space-y-4">
+              <CaseActionsEditor caseId={caseData.id} />
+            </TabsContent>
+          )}
+
+          {/* Tab 5: Documents (only in edit mode) */}
+          {isEdit && caseData && (
+            <TabsContent value="documents" className="space-y-4">
+              <CaseDocuments caseId={caseData.id} />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Footer */}

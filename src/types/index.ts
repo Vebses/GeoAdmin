@@ -8,6 +8,8 @@ export type {
   PartnerFormData,
   OurCompanyFormData,
   CaseFormData,
+  CaseActionFormData,
+  CaseDocumentFormData,
   InvoiceFormData,
   InvoiceServiceFormData,
   LoginFormData,
@@ -57,6 +59,14 @@ export interface CaseWithRelations extends Case {
   actions?: CaseAction[];
   documents?: CaseDocument[];
   invoices?: Invoice[];
+}
+
+export interface CaseActionWithRelations extends CaseAction {
+  executor?: Partner | null;
+}
+
+export interface CaseDocumentWithRelations extends CaseDocument {
+  uploader?: User | null;
 }
 
 export interface InvoiceWithRelations extends Invoice {

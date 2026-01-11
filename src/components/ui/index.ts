@@ -14,3 +14,5 @@ export * from './confirm-dialog';
 export * from './label';
 export * from './textarea';
 export * from './tabs';
+export * from './file-dropzone';
+export * from './currency-input';

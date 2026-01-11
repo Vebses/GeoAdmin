@@ -218,6 +218,47 @@ export const caseSchema = z.object({
 // ============================================
 // INVOICE SCHEMAS
 // ============================================
+// CASE ACTION SCHEMAS
+// ============================================
+
+export const caseActionSchema = z.object({
+  case_id: z.string().uuid('ქეისი აუცილებელია'),
+  executor_id: z.string().uuid().optional().nullable(),
+  service_name: z.string().min(1, 'სერვისის სახელი აუცილებელია').max(200, 'სერვისის სახელი ძალიან გრძელია'),
+  service_description: z.string().max(1000, 'აღწერა ძალიან გრძელია').optional().nullable(),
+  service_cost: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი').default(0),
+  service_currency: z.enum(['GEL', 'USD', 'EUR']).default('GEL'),
+  assistance_cost: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი').default(0),
+  assistance_currency: z.enum(['GEL', 'USD', 'EUR']).default('GEL'),
+  commission_cost: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი').default(0),
+  commission_currency: z.enum(['GEL', 'USD', 'EUR']).default('GEL'),
+  service_date: z.coerce.date().optional().nullable(),
+  comment: z.string().max(500, 'კომენტარი ძალიან გრძელია').optional().nullable(),
+  sort_order: z.coerce.number().int().min(0).default(0),
+});
+
+export const reorderActionsSchema = z.object({
+  actions: z.array(z.object({
+    id: z.string().uuid(),
+    sort_order: z.number().int().min(0),
+  })).min(1, 'მინიმუმ ერთი მოქმედება აუცილებელია'),
+});
+
+// ============================================
+// CASE DOCUMENT SCHEMAS
+// ============================================
+
+export const caseDocumentSchema = z.object({
+  case_id: z.string().uuid('ქეისი აუცილებელია'),
+  type: z.enum(['patient', 'original', 'medical']),
+  file_name: z.string().min(1, 'ფაილის სახელი აუცილებელია').max(255, 'ფაილის სახელი ძალიან გრძელია'),
+  file_url: z.string().url('არასწორი URL'),
+  file_size: z.coerce.number().int().min(0).optional().nullable(),
+  mime_type: z.string().max(100).optional().nullable(),
+  thumbnail_url: z.string().url().optional().nullable(),
+});
+
+// ============================================
 
 export const invoiceServiceSchema = z.object({
   name: z.string().min(1, 'სერვისის სახელი აუცილებელია'),
@@ -257,5 +298,7 @@ export type PartnerFormData = z.infer<typeof partnerSchema>;
 export type CategoryFormData = z.infer<typeof categorySchema>;
 export type OurCompanyFormData = z.infer<typeof ourCompanySchema>;
 export type CaseFormData = z.infer<typeof caseSchema>;
+export type CaseActionFormData = z.infer<typeof caseActionSchema>;
+export type CaseDocumentFormData = z.infer<typeof caseDocumentSchema>;
 export type InvoiceFormData = z.infer<typeof invoiceSchema>;
 export type InvoiceServiceFormData = z.infer<typeof invoiceServiceSchema>;
