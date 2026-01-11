@@ -1,0 +1,261 @@
+import { z } from 'zod';
+
+// ============================================
+// AUTH SCHEMAS
+// ============================================
+
+export const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'ელ-ფოსტა აუცილებელია')
+    .email('არასწორი ელ-ფოსტის ფორმატი'),
+  password: z
+    .string()
+    .min(1, 'პაროლი აუცილებელია')
+    .min(8, 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო'),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'ელ-ფოსტა აუცილებელია')
+    .email('არასწორი ელ-ფოსტის ფორმატი'),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო')
+      .max(72, 'პაროლი ძალიან გრძელია')
+      .regex(/[A-Z]/, 'პაროლი უნდა შეიცავდეს დიდ ასოს')
+      .regex(/[a-z]/, 'პაროლი უნდა შეიცავდეს პატარა ასოს')
+      .regex(/[0-9]/, 'პაროლი უნდა შეიცავდეს ციფრს'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'პაროლები არ ემთხვევა',
+    path: ['confirmPassword'],
+  });
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'მიმდინარე პაროლი აუცილებელია'),
+    newPassword: z
+      .string()
+      .min(8, 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო')
+      .max(72, 'პაროლი ძალიან გრძელია')
+      .regex(/[A-Z]/, 'პაროლი უნდა შეიცავდეს დიდ ასოს')
+      .regex(/[a-z]/, 'პაროლი უნდა შეიცავდეს პატარა ასოს')
+      .regex(/[0-9]/, 'პაროლი უნდა შეიცავდეს ციფრს'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'პაროლები არ ემთხვევა',
+    path: ['confirmPassword'],
+  });
+
+// ============================================
+// USER SCHEMAS
+// ============================================
+
+export const userProfileSchema = z.object({
+  full_name: z
+    .string()
+    .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'სახელი ძალიან გრძელია'),
+  phone: z
+    .string()
+    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+});
+
+export const createUserSchema = z.object({
+  email: z.string().email('არასწორი ელ-ფოსტის ფორმატი'),
+  full_name: z
+    .string()
+    .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'სახელი ძალიან გრძელია'),
+  role: z.enum(['manager', 'assistant', 'accountant']),
+  is_active: z.boolean().default(true),
+  phone: z
+    .string()
+    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  password: z
+    .string()
+    .min(8, 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო')
+    .max(72, 'პაროლი ძალიან გრძელია')
+    .regex(/[A-Z]/, 'პაროლი უნდა შეიცავდეს დიდ ასოს')
+    .regex(/[a-z]/, 'პაროლი უნდა შეიცავდეს პატარა ასოს')
+    .regex(/[0-9]/, 'პაროლი უნდა შეიცავდეს ციფრს'),
+});
+
+// ============================================
+// PARTNER SCHEMAS
+// ============================================
+
+export const partnerSchema = z.object({
+  name: z
+    .string()
+    .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'სახელი ძალიან გრძელია')
+    .trim(),
+  legal_name: z.string().max(200, 'იურიდიული სახელი ძალიან გრძელია').optional().nullable(),
+  id_code: z
+    .string()
+    .regex(/^\d{9,11}$/, 'საიდენტიფიკაციო კოდი უნდა იყოს 9-11 ციფრი')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  category_id: z.string().uuid().optional().nullable(),
+  country: z.string().max(100).default('საქართველო'),
+  city: z.string().max(100).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
+  phone: z.string().max(50).optional().nullable(),
+  website: z.string().url('არასწორი URL').optional().nullable().or(z.literal('')),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+// ============================================
+// CATEGORY SCHEMAS
+// ============================================
+
+export const categorySchema = z.object({
+  name: z
+    .string()
+    .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'სახელი ძალიან გრძელია'),
+  name_en: z.string().max(100).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'არასწორი ფერის კოდი').default('#6366f1'),
+  icon: z.string().max(50).default('folder'),
+});
+
+// ============================================
+// OUR COMPANY SCHEMAS
+// ============================================
+
+export const ourCompanySchema = z.object({
+  name: z
+    .string()
+    .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'სახელი ძალიან გრძელია'),
+  legal_name: z
+    .string()
+    .min(2, 'იურიდიული სახელი აუცილებელია')
+    .max(200, 'იურიდიული სახელი ძალიან გრძელია'),
+  id_code: z
+    .string()
+    .min(9, 'საიდენტიფიკაციო კოდი აუცილებელია')
+    .max(11, 'საიდენტიფიკაციო კოდი ძალიან გრძელია'),
+  country: z.string().max(100).default('საქართველო'),
+  city: z.string().max(100).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
+  phone: z.string().max(50).optional().nullable(),
+  website: z.string().url('არასწორი URL').optional().nullable().or(z.literal('')),
+  bank_name: z.string().max(100).optional().nullable(),
+  bank_code: z.string().max(20).optional().nullable(),
+  account_gel: z.string().max(50).optional().nullable(),
+  account_usd: z.string().max(50).optional().nullable(),
+  account_eur: z.string().max(50).optional().nullable(),
+  invoice_prefix: z.string().max(10).default('INV'),
+  invoice_footer_text: z.string().max(1000).optional().nullable(),
+  is_default: z.boolean().default(false),
+});
+
+// ============================================
+// CASE SCHEMAS
+// ============================================
+
+export const caseSchema = z.object({
+  case_number: z
+    .string()
+    .min(3, 'ქეისის ნომერი უნდა იყოს მინიმუმ 3 სიმბოლო')
+    .max(20, 'ქეისის ნომერი ძალიან გრძელია')
+    .regex(/^[A-Z0-9-]+$/, 'მხოლოდ დიდი ასოები, ციფრები და ტირე')
+    .optional(),
+  status: z.enum(['draft', 'in_progress', 'paused', 'delayed', 'completed', 'cancelled']),
+  patient_name: z
+    .string()
+    .min(2, 'პაციენტის სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
+    .max(100, 'პაციენტის სახელი ძალიან გრძელია')
+    .trim(),
+  patient_id: z
+    .string()
+    .regex(/^\d{11}$/, 'პირადი ნომერი უნდა იყოს 11 ციფრი')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  patient_dob: z.coerce.date().max(new Date(), 'დაბადების თარიღი არ შეიძლება იყოს მომავალში').optional().nullable(),
+  patient_phone: z
+    .string()
+    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  patient_email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
+  client_id: z.string().uuid().optional().nullable(),
+  insurance_id: z.string().uuid().optional().nullable(),
+  insurance_policy_number: z.string().max(50).optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+  is_medical: z.boolean().default(true),
+  is_documented: z.boolean().default(false),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  complaints: z.string().max(5000, 'ტექსტი ძალიან გრძელია').optional().nullable(),
+  needs: z.string().max(5000, 'ტექსტი ძალიან გრძელია').optional().nullable(),
+  diagnosis: z.string().max(5000, 'ტექსტი ძალიან გრძელია').optional().nullable(),
+  treatment_notes: z.string().max(5000, 'ტექსტი ძალიან გრძელია').optional().nullable(),
+  opened_at: z.coerce.date().default(() => new Date()),
+});
+
+// ============================================
+// INVOICE SCHEMAS
+// ============================================
+
+export const invoiceServiceSchema = z.object({
+  name: z.string().min(1, 'სერვისის სახელი აუცილებელია'),
+  description: z.string().optional().nullable(),
+  quantity: z.coerce.number().int().min(1, 'მინიმუმ 1').default(1),
+  unit_price: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი'),
+  amount: z.coerce.number(),
+});
+
+export const invoiceSchema = z.object({
+  case_id: z.string().uuid('აირჩიეთ ქეისი'),
+  recipient_id: z.string().uuid('აირჩიეთ მიმღები'),
+  sender_id: z.string().uuid('აირჩიეთ გამგზავნი'),
+  status: z.enum(['draft', 'unpaid', 'paid', 'cancelled']).default('draft'),
+  currency: z.enum(['GEL', 'USD', 'EUR']).default('EUR'),
+  franchise: z.coerce.number().min(0, 'ფრანშიზა არ შეიძლება იყოს უარყოფითი').max(999999.99, 'ფრანშიზა ძალიან დიდია').default(0),
+  language: z.enum(['en', 'ka']).default('en'),
+  recipient_email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable(),
+  cc_emails: z.array(z.string().email('არასწორი CC ელ-ფოსტა')).max(5, 'მაქსიმუმ 5 CC ელ-ფოსტა').optional(),
+  email_subject: z.string().max(200, 'თემა ძალიან გრძელია').optional().nullable(),
+  email_body: z.string().max(5000, 'ტექსტი ძალიან გრძელია').optional().nullable(),
+  attach_patient_docs: z.boolean().default(false),
+  attach_original_docs: z.boolean().default(false),
+  attach_medical_docs: z.boolean().default(false),
+  notes: z.string().max(2000, 'შენიშვნა ძალიან გრძელია').optional().nullable(),
+  services: z.array(invoiceServiceSchema).min(1, 'მინიმუმ 1 სერვისი აუცილებელია'),
+});
+
+// Export types
+export type LoginFormData = z.infer<typeof loginSchema>;
+export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
+export type UserProfileFormData = z.infer<typeof userProfileSchema>;
+export type CreateUserFormData = z.infer<typeof createUserSchema>;
+export type PartnerFormData = z.infer<typeof partnerSchema>;
+export type CategoryFormData = z.infer<typeof categorySchema>;
+export type OurCompanyFormData = z.infer<typeof ourCompanySchema>;
+export type CaseFormData = z.infer<typeof caseSchema>;
+export type InvoiceFormData = z.infer<typeof invoiceSchema>;
+export type InvoiceServiceFormData = z.infer<typeof invoiceServiceSchema>;
