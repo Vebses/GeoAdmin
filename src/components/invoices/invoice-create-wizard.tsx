@@ -45,7 +45,7 @@ export function InvoiceCreateWizard({
   // Step 2 state
   const [currency, setCurrency] = useState<CurrencyCode>('EUR');
   const [language, setLanguage] = useState<InvoiceLanguage>('en');
-  const [franchise, setFranchise] = useState<number>(0);
+  const [franchiseAmount, setFranchiseAmount] = useState<number>(0);
   const [services, setServices] = useState<InvoiceServiceFormData[]>([]);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -87,19 +87,24 @@ export function InvoiceCreateWizard({
 
       const actionsToUse = relevantActions.length > 0 ? relevantActions : caseActions;
       
-      const newServices = actionsToUse.map((action) => {
+      const newServices: InvoiceServiceFormData[] = actionsToUse.map((action) => {
         let unitPrice = 0;
         if (currency === 'GEL') {
           unitPrice = action.service_cost || 0;
         } else {
           unitPrice = action.assistance_cost || action.service_cost || 0;
         }
+        
+        // Combine service name and description
+        const description = action.service_description 
+          ? `${action.service_name} - ${action.service_description}`
+          : action.service_name;
+        
         return {
-          name: action.service_name,
-          description: action.service_description || null,
+          description,
           quantity: 1,
           unit_price: unitPrice,
-          amount: unitPrice,
+          total: unitPrice,
         };
       });
       
@@ -116,7 +121,7 @@ export function InvoiceCreateWizard({
       setSelectedSenderId(null);
       setCurrency('EUR');
       setLanguage('en');
-      setFranchise(0);
+      setFranchiseAmount(0);
       setServices([]);
       setRecipientEmail('');
       setEmailSubject('');
@@ -140,7 +145,9 @@ export function InvoiceCreateWizard({
       sender_id: selectedSenderId!,
       status: 'draft',
       currency,
-      franchise,
+      franchise_amount: franchiseAmount,
+      franchise_type: 'fixed',
+      franchise_value: franchiseAmount,
       language,
       recipient_email: recipientEmail || null,
       cc_emails: [],
@@ -228,7 +235,7 @@ export function InvoiceCreateWizard({
             <InvoiceStepDetails
               currency={currency}
               language={language}
-              franchise={franchise}
+              franchiseAmount={franchiseAmount}
               services={services}
               recipientEmail={recipientEmail}
               emailSubject={emailSubject}
@@ -241,7 +248,7 @@ export function InvoiceCreateWizard({
               recipientId={selectedRecipientId || undefined}
               onCurrencyChange={setCurrency}
               onLanguageChange={setLanguage}
-              onFranchiseChange={setFranchise}
+              onFranchiseAmountChange={setFranchiseAmount}
               onServicesChange={setServices}
               onRecipientEmailChange={setRecipientEmail}
               onEmailSubjectChange={setEmailSubject}

@@ -25,11 +25,10 @@ export function InvoiceServicesEditor({
 }: InvoiceServicesEditorProps) {
   const handleAddService = () => {
     const newService: InvoiceServiceFormData = {
-      name: '',
-      description: null,
+      description: '',
       quantity: 1,
       unit_price: 0,
-      amount: 0,
+      total: 0,
     };
     onChange([...services, newService]);
   };
@@ -53,35 +52,9 @@ export function InvoiceServicesEditor({
       ? caseActions.filter((action) => action.executor_id === recipientId)
       : caseActions;
 
-    if (!relevantActions.length) {
-      // If no actions for this recipient, use all actions
-      const allServices = caseActions.map((action) => {
-        // Determine which cost to use based on currency
-        let unitPrice = 0;
-        if (currency === 'GEL' && action.service_currency === 'GEL') {
-          unitPrice = action.service_cost || 0;
-        } else if (currency === 'EUR' && action.assistance_currency === 'EUR') {
-          unitPrice = action.assistance_cost || 0;
-        } else if (currency === 'USD' && action.assistance_currency === 'USD') {
-          unitPrice = action.assistance_cost || 0;
-        } else {
-          // Default to assistance cost for EUR
-          unitPrice = action.assistance_cost || action.service_cost || 0;
-        }
+    const actionsToUse = relevantActions.length > 0 ? relevantActions : caseActions;
 
-        return {
-          name: action.service_name,
-          description: action.service_description || null,
-          quantity: 1,
-          unit_price: unitPrice,
-          amount: unitPrice,
-        };
-      });
-      onChange(allServices);
-      return;
-    }
-
-    const newServices = relevantActions.map((action) => {
+    const newServices: InvoiceServiceFormData[] = actionsToUse.map((action) => {
       // Determine which cost to use based on currency
       let unitPrice = 0;
       if (currency === 'GEL' && action.service_currency === 'GEL') {
@@ -95,19 +68,23 @@ export function InvoiceServicesEditor({
         unitPrice = action.assistance_cost || action.service_cost || 0;
       }
 
+      // Use service_name as description (since we only have description field now)
+      const description = action.service_description 
+        ? `${action.service_name} - ${action.service_description}`
+        : action.service_name;
+
       return {
-        name: action.service_name,
-        description: action.service_description || null,
+        description,
         quantity: 1,
         unit_price: unitPrice,
-        amount: unitPrice,
+        total: unitPrice,
       };
     });
 
     onChange(newServices);
   };
 
-  const subtotal = services.reduce((sum, s) => sum + (s.amount || 0), 0);
+  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
 
   const currencySymbol = {
     GEL: '₾',

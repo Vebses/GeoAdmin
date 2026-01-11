@@ -210,9 +210,11 @@ export function InvoiceStepCase({
                     <div key={action.id} className="p-2 flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-gray-900">{action.service_name}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {action.executor?.name || 'შემსრულებელი არ არის'}
-                        </p>
+                        {action.service_description && (
+                          <p className="text-[10px] text-gray-500">
+                            {action.service_description}
+                          </p>
+                        )}
                       </div>
                       <span className="text-xs font-medium text-gray-700">
                         €{(action.assistance_cost || 0).toFixed(2)}

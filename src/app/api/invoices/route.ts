@@ -127,18 +127,19 @@ export async function POST(request: Request) {
     const invoiceData = validationResult.data;
 
     // Get sender company for prefix
-    const { data: senderCompany } = await supabase
+    const { data: senderCompanyData } = await supabase
       .from('our_companies')
       .select('invoice_prefix')
       .eq('id', invoiceData.sender_id)
       .single();
 
+    const senderCompany = senderCompanyData as { invoice_prefix: string | null } | null;
     const prefix = senderCompany?.invoice_prefix || 'INV';
 
     // Generate invoice number
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const { data: lastInvoice } = await supabase
+    const { data: lastInvoiceData } = await supabase
       .from('invoices')
       .select('invoice_number')
       .like('invoice_number', `${prefix}-${year}${month}-%`)
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
       .limit(1)
       .single();
 
+    const lastInvoice = lastInvoiceData as { invoice_number: string } | null;
     let nextNumber = 1;
     if (lastInvoice?.invoice_number) {
       const parts = lastInvoice.invoice_number.split('-');
@@ -154,10 +156,11 @@ export async function POST(request: Request) {
     const invoiceNumber = `${prefix}-${year}${month}-${String(nextNumber).padStart(4, '0')}`;
 
     // Calculate totals
-    const subtotal = invoiceData.services.reduce((sum, service) => sum + service.amount, 0);
-    const total = subtotal - (invoiceData.franchise || 0);
+    const subtotal = invoiceData.services.reduce((sum, service) => sum + service.total, 0);
+    const franchiseAmount = invoiceData.franchise_amount || 0;
+    const total = subtotal - franchiseAmount;
 
-    // Build insert object
+    // Build insert object matching database schema
     const insertData = {
       invoice_number: invoiceNumber,
       case_id: invoiceData.case_id,
@@ -166,7 +169,9 @@ export async function POST(request: Request) {
       status: invoiceData.status || 'draft',
       currency: invoiceData.currency,
       subtotal,
-      franchise: invoiceData.franchise || 0,
+      franchise_amount: franchiseAmount,
+      franchise_type: invoiceData.franchise_type || 'fixed',
+      franchise_value: invoiceData.franchise_value || 0,
       total: Math.max(0, total),
       language: invoiceData.language,
       email_subject: invoiceData.email_subject || null,
@@ -180,30 +185,31 @@ export async function POST(request: Request) {
       created_by: user.id,
     };
 
-    // Create invoice
+    // Create invoice - use type assertion to work around strict types
     const { data: newInvoice, error: invoiceError } = await supabase
       .from('invoices')
-      .insert(insertData)
+      .insert(insertData as never)
       .select()
       .single();
 
     if (invoiceError) throw invoiceError;
 
+    const invoiceId = (newInvoice as { id: string }).id;
+
     // Create services
     if (invoiceData.services.length > 0) {
       const servicesInsertData = invoiceData.services.map((service, index) => ({
-        invoice_id: newInvoice.id,
-        name: service.name,
-        description: service.description || null,
+        invoice_id: invoiceId,
+        description: service.description,
         quantity: service.quantity || 1,
         unit_price: service.unit_price,
-        amount: service.amount,
+        total: service.total,
         sort_order: index,
       }));
 
       const { error: servicesError } = await supabase
         .from('invoice_services')
-        .insert(servicesInsertData);
+        .insert(servicesInsertData as never);
 
       if (servicesError) throw servicesError;
     }
@@ -219,13 +225,17 @@ export async function POST(request: Request) {
         creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*)
       `)
-      .eq('id', newInvoice.id)
+      .eq('id', invoiceId)
       .single();
 
     if (fetchError) throw fetchError;
 
     // Update case invoices_count
-    await supabase.rpc('increment_case_invoices_count', { case_id: invoiceData.case_id });
+    try {
+      await supabase.rpc('increment_case_invoices_count', { case_id: invoiceData.case_id } as never);
+    } catch (rpcError) {
+      console.warn('Failed to increment case invoices_count:', rpcError);
+    }
 
     return NextResponse.json({
       success: true,

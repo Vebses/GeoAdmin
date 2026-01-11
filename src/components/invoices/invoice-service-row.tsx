@@ -22,25 +22,20 @@ export function InvoiceServiceRow({
   readOnly = false,
 }: InvoiceServiceRowProps) {
   const handleQuantityChange = (quantity: number) => {
-    const amount = quantity * service.unit_price;
-    onChange(index, { quantity, amount });
+    const total = quantity * service.unit_price;
+    onChange(index, { quantity, total });
   };
 
   const handleUnitPriceChange = (unit_price: number) => {
-    const amount = service.quantity * unit_price;
-    onChange(index, { unit_price, amount });
+    const total = service.quantity * unit_price;
+    onChange(index, { unit_price, total });
   };
 
   if (readOnly) {
     return (
       <tr className="border-b border-gray-100 last:border-b-0">
         <td className="py-2 pr-3">
-          <div>
-            <p className="text-xs font-medium text-gray-900">{service.name}</p>
-            {service.description && (
-              <p className="text-[10px] text-gray-500 mt-0.5">{service.description}</p>
-            )}
-          </div>
+          <p className="text-xs font-medium text-gray-900">{service.description}</p>
         </td>
         <td className="py-2 px-3 text-center">
           <span className="text-xs text-gray-700">{service.quantity}</span>
@@ -49,7 +44,7 @@ export function InvoiceServiceRow({
           <span className="text-xs text-gray-700">{service.unit_price.toFixed(2)}</span>
         </td>
         <td className="py-2 pl-3 text-right">
-          <span className="text-xs font-medium text-gray-900">{service.amount.toFixed(2)}</span>
+          <span className="text-xs font-medium text-gray-900">{service.total.toFixed(2)}</span>
         </td>
       </tr>
     );
@@ -58,20 +53,12 @@ export function InvoiceServiceRow({
   return (
     <tr className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50">
       <td className="py-2 pr-3">
-        <div className="space-y-1">
-          <Input
-            value={service.name}
-            onChange={(e) => onChange(index, { name: e.target.value })}
-            placeholder="სერვისის სახელი"
-            className="h-8 text-xs"
-          />
-          <Input
-            value={service.description || ''}
-            onChange={(e) => onChange(index, { description: e.target.value })}
-            placeholder="აღწერა (არჩევითი)"
-            className="h-7 text-[10px] text-gray-500"
-          />
-        </div>
+        <Input
+          value={service.description}
+          onChange={(e) => onChange(index, { description: e.target.value })}
+          placeholder="სერვისის აღწერა"
+          className="h-8 text-xs"
+        />
       </td>
       <td className="py-2 px-3">
         <Input
@@ -96,9 +83,9 @@ export function InvoiceServiceRow({
       <td className="py-2 px-3">
         <span className={cn(
           'block text-xs text-right font-medium',
-          service.amount > 0 ? 'text-gray-900' : 'text-gray-400'
+          service.total > 0 ? 'text-gray-900' : 'text-gray-400'
         )}>
-          {service.amount.toFixed(2)}
+          {service.total.toFixed(2)}
         </span>
       </td>
       <td className="py-2 pl-3">

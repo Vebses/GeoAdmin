@@ -64,7 +64,7 @@ export function InvoiceEditPanel({
   const [senderId, setSenderId] = useState<string | null>(null);
   const [currency, setCurrency] = useState<CurrencyCode>('EUR');
   const [language, setLanguage] = useState<InvoiceLanguage>('en');
-  const [franchise, setFranchise] = useState<number>(0);
+  const [franchiseAmount, setFranchiseAmount] = useState<number>(0);
   const [services, setServices] = useState<InvoiceServiceFormData[]>([]);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -82,7 +82,7 @@ export function InvoiceEditPanel({
       setSenderId(invoice.sender_id);
       setCurrency(invoice.currency);
       setLanguage(invoice.language);
-      setFranchise(invoice.franchise || 0);
+      setFranchiseAmount(invoice.franchise_amount || 0);
       setRecipientEmail(invoice.recipient_email || '');
       setEmailSubject(invoice.email_subject || '');
       setEmailBody(invoice.email_body || '');
@@ -93,11 +93,10 @@ export function InvoiceEditPanel({
       
       // Convert services
       const invoiceServices = (invoice.services || []).map((s) => ({
-        name: s.name,
         description: s.description,
         quantity: s.quantity,
         unit_price: s.unit_price,
-        amount: s.amount,
+        total: s.total,
       }));
       setServices(invoiceServices);
     }
@@ -105,8 +104,8 @@ export function InvoiceEditPanel({
 
   if (!isOpen || !invoice) return null;
 
-  const subtotal = services.reduce((sum, s) => sum + (s.amount || 0), 0);
-  const total = Math.max(0, subtotal - franchise);
+  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
+  const total = Math.max(0, subtotal - franchiseAmount);
 
   const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || '€';
 
@@ -117,7 +116,7 @@ export function InvoiceEditPanel({
       sender_id: senderId!,
       currency,
       language,
-      franchise,
+      franchise_amount: franchiseAmount,
       recipient_email: recipientEmail || null,
       email_subject: emailSubject || null,
       email_body: emailBody || null,
@@ -220,8 +219,8 @@ export function InvoiceEditPanel({
               <Label className="text-xs">ფრანშიზა ({currencySymbol})</Label>
               <Input
                 type="number"
-                value={franchise || ''}
-                onChange={(e) => setFranchise(parseFloat(e.target.value) || 0)}
+                value={franchiseAmount || ''}
+                onChange={(e) => setFranchiseAmount(parseFloat(e.target.value) || 0)}
                 placeholder="0.00"
                 min={0}
                 step="0.01"
@@ -281,11 +280,11 @@ export function InvoiceEditPanel({
                   {formatCurrency(subtotal, currency)}
                 </span>
               </div>
-              {franchise > 0 && (
+              {franchiseAmount > 0 && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-600">ფრანშიზა:</span>
                   <span className="font-medium text-red-600">
-                    -{formatCurrency(franchise, currency)}
+                    -{formatCurrency(franchiseAmount, currency)}
                   </span>
                 </div>
               )}

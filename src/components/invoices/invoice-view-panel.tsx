@@ -47,11 +47,10 @@ export function InvoiceViewPanel({
   if (!isOpen || !invoice) return null;
 
   const services: InvoiceServiceFormData[] = (invoice.services || []).map((s) => ({
-    name: s.name,
     description: s.description,
     quantity: s.quantity,
     unit_price: s.unit_price,
-    amount: s.amount,
+    total: s.total,
   }));
 
   const languageLabel = invoice.language === 'ka' ? 'ქართული' : 'English';
@@ -241,11 +240,11 @@ export function InvoiceViewPanel({
                   {formatCurrency(invoice.subtotal, invoice.currency)}
                 </span>
               </div>
-              {invoice.franchise > 0 && (
+              {invoice.franchise_amount > 0 && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-600">ფრანშიზა:</span>
                   <span className="font-medium text-red-600">
-                    -{formatCurrency(invoice.franchise, invoice.currency)}
+                    -{formatCurrency(invoice.franchise_amount, invoice.currency)}
                   </span>
                 </div>
               )}
@@ -273,7 +272,7 @@ export function InvoiceViewPanel({
                 <div>
                   <p className="text-[10px] text-emerald-600">გადახდილი თანხა</p>
                   <p className="text-xs font-medium text-gray-900">
-                    {formatCurrency(invoice.paid_amount || invoice.total, invoice.currency)}
+                    {formatCurrency(invoice.total, invoice.currency)}
                   </p>
                 </div>
                 {invoice.payment_reference && (
@@ -305,7 +304,7 @@ export function InvoiceViewPanel({
                         {send.status}
                       </Badge>
                       <p className="text-[10px] text-gray-500 mt-0.5">
-                        {formatDate(send.sent_at)}
+                        {formatDate(send.created_at)}
                       </p>
                     </div>
                   </div>

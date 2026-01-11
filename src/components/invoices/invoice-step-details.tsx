@@ -17,7 +17,7 @@ import type {
 interface InvoiceStepDetailsProps {
   currency: CurrencyCode;
   language: InvoiceLanguage;
-  franchise: number;
+  franchiseAmount: number;
   services: InvoiceServiceFormData[];
   recipientEmail: string;
   emailSubject: string;
@@ -30,7 +30,7 @@ interface InvoiceStepDetailsProps {
   recipientId?: string;
   onCurrencyChange: (currency: CurrencyCode) => void;
   onLanguageChange: (language: InvoiceLanguage) => void;
-  onFranchiseChange: (franchise: number) => void;
+  onFranchiseAmountChange: (franchiseAmount: number) => void;
   onServicesChange: (services: InvoiceServiceFormData[]) => void;
   onRecipientEmailChange: (email: string) => void;
   onEmailSubjectChange: (subject: string) => void;
@@ -55,7 +55,7 @@ const languages: { value: InvoiceLanguage; label: string }[] = [
 export function InvoiceStepDetails({
   currency,
   language,
-  franchise,
+  franchiseAmount,
   services,
   recipientEmail,
   emailSubject,
@@ -68,7 +68,7 @@ export function InvoiceStepDetails({
   recipientId,
   onCurrencyChange,
   onLanguageChange,
-  onFranchiseChange,
+  onFranchiseAmountChange,
   onServicesChange,
   onRecipientEmailChange,
   onEmailSubjectChange,
@@ -78,18 +78,19 @@ export function InvoiceStepDetails({
   onAttachMedicalDocsChange,
   onNotesChange,
 }: InvoiceStepDetailsProps) {
-  const subtotal = services.reduce((sum, s) => sum + (s.amount || 0), 0);
-  const total = Math.max(0, subtotal - franchise);
+  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
+  const total = Math.max(0, subtotal - franchiseAmount);
 
-  const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || '€';
+  const currencyConfig = currencies.find((c) => c.value === currency);
+  const currencySymbol = currencyConfig?.symbol || '€';
 
   return (
-    <div className="p-5 space-y-6">
-      {/* Invoice Settings */}
+    <div className="p-6 space-y-6">
+      {/* Currency, Language, Franchise */}
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label className="text-xs">ვალუტა *</Label>
-          <Select value={currency} onValueChange={onCurrencyChange}>
+          <Label className="text-xs">ვალუტა</Label>
+          <Select value={currency} onValueChange={(v) => onCurrencyChange(v as CurrencyCode)}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
@@ -104,8 +105,8 @@ export function InvoiceStepDetails({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs">ინვოისის ენა *</Label>
-          <Select value={language} onValueChange={onLanguageChange}>
+          <Label className="text-xs">ენა</Label>
+          <Select value={language} onValueChange={(v) => onLanguageChange(v as InvoiceLanguage)}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
@@ -123,8 +124,8 @@ export function InvoiceStepDetails({
           <Label className="text-xs">ფრანშიზა ({currencySymbol})</Label>
           <Input
             type="number"
-            value={franchise || ''}
-            onChange={(e) => onFranchiseChange(parseFloat(e.target.value) || 0)}
+            value={franchiseAmount || ''}
+            onChange={(e) => onFranchiseAmountChange(parseFloat(e.target.value) || 0)}
             placeholder="0.00"
             min={0}
             step="0.01"
@@ -151,11 +152,11 @@ export function InvoiceStepDetails({
               {formatCurrency(subtotal, currency)}
             </span>
           </div>
-          {franchise > 0 && (
+          {franchiseAmount > 0 && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-600">ფრანშიზა:</span>
               <span className="font-medium text-red-600">
-                -{formatCurrency(franchise, currency)}
+                -{formatCurrency(franchiseAmount, currency)}
               </span>
             </div>
           )}
@@ -184,17 +185,17 @@ export function InvoiceStepDetails({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs">ელ-ფოსტის თემა</Label>
+          <Label className="text-xs">თემა</Label>
           <Input
             value={emailSubject}
             onChange={(e) => onEmailSubjectChange(e.target.value)}
-            placeholder="Invoice #{invoiceNumber} for Case #{caseNumber}"
+            placeholder="Invoice #..."
             className="h-9 text-xs"
           />
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs">ელ-ფოსტის ტექსტი</Label>
+          <Label className="text-xs">შეტყობინების ტექსტი</Label>
           <Textarea
             value={emailBody}
             onChange={(e) => onEmailBodyChange(e.target.value)}
@@ -212,7 +213,7 @@ export function InvoiceStepDetails({
               <Checkbox
                 id="attach-patient"
                 checked={attachPatientDocs}
-                onCheckedChange={(checked) => onAttachPatientDocsChange(!!checked)}
+                onCheckedChange={(checked: boolean | 'indeterminate') => onAttachPatientDocsChange(!!checked)}
               />
               <Label htmlFor="attach-patient" className="text-xs text-gray-700 cursor-pointer">
                 პაციენტის დოკუმენტები
@@ -222,7 +223,7 @@ export function InvoiceStepDetails({
               <Checkbox
                 id="attach-original"
                 checked={attachOriginalDocs}
-                onCheckedChange={(checked) => onAttachOriginalDocsChange(!!checked)}
+                onCheckedChange={(checked: boolean | 'indeterminate') => onAttachOriginalDocsChange(!!checked)}
               />
               <Label htmlFor="attach-original" className="text-xs text-gray-700 cursor-pointer">
                 ორიგინალი დოკუმენტები
@@ -232,7 +233,7 @@ export function InvoiceStepDetails({
               <Checkbox
                 id="attach-medical"
                 checked={attachMedicalDocs}
-                onCheckedChange={(checked) => onAttachMedicalDocsChange(!!checked)}
+                onCheckedChange={(checked: boolean | 'indeterminate') => onAttachMedicalDocsChange(!!checked)}
               />
               <Label htmlFor="attach-medical" className="text-xs text-gray-700 cursor-pointer">
                 სამედიცინო დოკუმენტები

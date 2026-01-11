@@ -1,21 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { z } from 'zod';
 
-interface RouteParams {
+interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-const markPaidSchema = z.object({
-  paid_at: z.string().datetime().optional(),
-  paid_amount: z.number().min(0).optional(),
-  payment_reference: z.string().max(100).optional().nullable(),
-  payment_notes: z.string().max(500).optional().nullable(),
-});
-
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: Request, context: RouteContext) {
   try {
-    const { id } = await params;
+    const { id } = await context.params;
     const supabase = await createClient();
     
     // Check auth
@@ -27,68 +19,54 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if invoice exists
-    const { data: existingInvoice, error: fetchError } = await supabase
+    // Get invoice
+    const { data: invoice, error: fetchError } = await supabase
       .from('invoices')
-      .select('id, total, status')
+      .select('id, status, total')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
 
-    if (fetchError || !existingInvoice) {
+    if (fetchError || !invoice) {
       return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'ინვოისი არ მოიძებნა' } },
+        { success: false, error: { code: 'NOT_FOUND', message: 'ინვოისი ვერ მოიძებნა' } },
         { status: 404 }
       );
     }
 
-    // Check if already paid
-    if (existingInvoice.status === 'paid') {
+    const invoiceData = invoice as { id: string; status: string; total: number };
+
+    if (invoiceData.status === 'paid') {
       return NextResponse.json(
         { success: false, error: { code: 'ALREADY_PAID', message: 'ინვოისი უკვე გადახდილია' } },
         { status: 400 }
       );
     }
 
-    // Parse and validate request body
+    // Parse optional body
     const body = await request.json().catch(() => ({}));
-    const validationResult = markPaidSchema.safeParse(body);
-    
-    if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
-    }
-
-    const paymentData = validationResult.data;
+    const { payment_reference, payment_notes } = body as { 
+      payment_reference?: string;
+      payment_notes?: string;
+    };
 
     // Update invoice
     const updateData = {
       status: 'paid' as const,
-      paid_at: paymentData.paid_at || new Date().toISOString(),
-      paid_amount: paymentData.paid_amount ?? existingInvoice.total,
-      payment_reference: paymentData.payment_reference || null,
-      payment_notes: paymentData.payment_notes || null,
+      paid_at: new Date().toISOString(),
+      payment_reference: payment_reference || null,
       updated_at: new Date().toISOString(),
     };
 
     const { error: updateError } = await supabase
       .from('invoices')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id);
 
     if (updateError) throw updateError;
 
     // Fetch updated invoice
-    const { data: updatedInvoice, error } = await supabase
+    const { data: updatedInvoice, error: refetchError } = await supabase
       .from('invoices')
       .select(`
         *,
@@ -96,16 +74,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         sender:our_companies!invoices_sender_id_fkey(id, name, legal_name),
         recipient:partners!invoices_recipient_id_fkey(id, name, legal_name, email),
         creator:users!invoices_created_by_fkey(id, full_name),
-        services:invoice_services(*)
+        services:invoice_services(*),
+        sends:invoice_sends(*)
       `)
       .eq('id', id)
       .single();
 
-    if (error) throw error;
+    if (refetchError) throw refetchError;
 
     return NextResponse.json({
       success: true,
       data: updatedInvoice,
+      message: 'ინვოისი მონიშნულია როგორც გადახდილი',
     });
   } catch (error) {
     console.error('Invoice mark-paid error:', error);

@@ -16,3 +16,4 @@ export * from './textarea';
 export * from './tabs';
 export * from './file-dropzone';
 export * from './currency-input';
+export * from './checkbox';

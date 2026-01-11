@@ -261,11 +261,10 @@ export const caseDocumentSchema = z.object({
 // ============================================
 
 export const invoiceServiceSchema = z.object({
-  name: z.string().min(1, 'სერვისის სახელი აუცილებელია'),
-  description: z.string().optional().nullable(),
+  description: z.string().min(1, 'სერვისის აღწერა აუცილებელია'),
   quantity: z.coerce.number().int().min(1, 'მინიმუმ 1').default(1),
   unit_price: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი'),
-  amount: z.coerce.number(),
+  total: z.coerce.number(),
 });
 
 export const invoiceSchema = z.object({
@@ -274,7 +273,9 @@ export const invoiceSchema = z.object({
   sender_id: z.string().uuid('აირჩიეთ გამგზავნი'),
   status: z.enum(['draft', 'unpaid', 'paid', 'cancelled']).default('draft'),
   currency: z.enum(['GEL', 'USD', 'EUR']).default('EUR'),
-  franchise: z.coerce.number().min(0, 'ფრანშიზა არ შეიძლება იყოს უარყოფითი').max(999999.99, 'ფრანშიზა ძალიან დიდია').default(0),
+  franchise_amount: z.coerce.number().min(0, 'ფრანშიზა არ შეიძლება იყოს უარყოფითი').max(999999.99, 'ფრანშიზა ძალიან დიდია').default(0),
+  franchise_type: z.enum(['fixed', 'percentage']).default('fixed'),
+  franchise_value: z.coerce.number().min(0).default(0),
   language: z.enum(['en', 'ka']).default('en'),
   recipient_email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable(),
   cc_emails: z.array(z.string().email('არასწორი CC ელ-ფოსტა')).max(5, 'მაქსიმუმ 5 CC ელ-ფოსტა').optional(),
