@@ -134,17 +134,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const uniqueName = `${caseId}/${type}/${timestamp}_${file.name}`;
 
     // Upload to Supabase Storage
+    const fileBuffer = await file.arrayBuffer();
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('geoadmin-files')
-      .upload(uniqueName, file, {
+      .upload(uniqueName, fileBuffer, {
         cacheControl: '3600',
         upsert: false,
+        contentType: file.type,
       });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
+      console.error('Upload error details:', {
+        error: uploadError,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        path: uniqueName
+      });
       return NextResponse.json(
-        { success: false, error: { code: 'UPLOAD_ERROR', message: 'ფაილის ატვირთვა ვერ მოხერხდა' } },
+        { 
+          success: false, 
+          error: { 
+            code: 'UPLOAD_ERROR', 
+            message: `ფაილის ატვირთვა ვერ მოხერხდა: ${uploadError.message}` 
+          } 
+        },
         { status: 500 }
       );
     }
@@ -190,8 +204,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 });
   } catch (error) {
     console.error('Case documents POST error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
+      { 
+        success: false, 
+        error: { 
+          code: 'SERVER_ERROR', 
+          message: `სერვერის შეცდომა: ${errorMessage}` 
+        } 
+      },
       { status: 500 }
     );
   }

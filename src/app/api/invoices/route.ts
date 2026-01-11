@@ -107,10 +107,23 @@ export async function POST(request: Request) {
     }
 
     // Parse and validate request body
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error('Failed to parse request JSON:', e);
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_JSON', message: 'არასწორი JSON ფორმატი' } },
+        { status: 400 }
+      );
+    }
+
+    console.log('Invoice creation request body:', JSON.stringify(body, null, 2));
+    
     const validationResult = invoiceSchema.safeParse(body);
     
     if (!validationResult.success) {
+      console.error('Invoice validation error:', validationResult.error.flatten());
       return NextResponse.json(
         { 
           success: false, 
@@ -243,8 +256,16 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Invoices POST error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
+      { 
+        success: false, 
+        error: { 
+          code: 'SERVER_ERROR', 
+          message: 'სერვერის შეცდომა',
+          details: errorMessage
+        } 
+      },
       { status: 500 }
     );
   }

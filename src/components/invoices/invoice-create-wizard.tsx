@@ -75,12 +75,12 @@ export function InvoiceCreateWizard({
     return selectedCase.actions.filter((a) => a.executor_id === selectedRecipientId);
   }, [selectedCase, selectedRecipientId]);
 
-  // Detect currency from relevant actions
+  // Detect currency from relevant actions - use commission_currency
   const detectedCurrency = useMemo((): CurrencyCode => {
     if (relevantActions.length === 0) return 'EUR';
     const firstAction = relevantActions[0];
-    // Use assistance_currency first, then service_currency, default to EUR
-    return (firstAction.assistance_currency || firstAction.service_currency || 'EUR') as CurrencyCode;
+    // Use commission_currency (საკომისიო), default to EUR
+    return (firstAction.commission_currency || 'EUR') as CurrencyCode;
   }, [relevantActions]);
 
   // Set default sender if there's only one company or a default company
@@ -112,13 +112,8 @@ export function InvoiceCreateWizard({
   useEffect(() => {
     if (step === 2 && relevantActions.length > 0 && services.length === 0) {
       const newServices: InvoiceServiceFormData[] = relevantActions.map((action) => {
-        // Determine which cost to use based on the detected currency
-        let unitPrice = 0;
-        if (detectedCurrency === 'GEL') {
-          unitPrice = action.service_cost || action.assistance_cost || 0;
-        } else {
-          unitPrice = action.assistance_cost || action.service_cost || 0;
-        }
+        // Use commission_cost (საკომისიო) for invoice pricing
+        const unitPrice = action.commission_cost || 0;
         
         // Combine service name and description
         const description = action.service_description 
@@ -135,7 +130,7 @@ export function InvoiceCreateWizard({
       
       setServices(newServices);
     }
-  }, [step, relevantActions, detectedCurrency, services.length]);
+  }, [step, relevantActions, services.length]);
 
   // Reset form when dialog closes
   useEffect(() => {

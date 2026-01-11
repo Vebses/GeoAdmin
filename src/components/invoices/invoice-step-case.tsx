@@ -77,13 +77,11 @@ export function InvoiceStepCase({
     return selectedCase.actions.filter((a) => a.executor_id === selectedRecipientId);
   }, [selectedCase, selectedRecipientId]);
 
-  // Determine currency from actions
+  // Determine currency from actions - prioritize commission_currency
   const detectedCurrency = useMemo(() => {
     if (servicesForRecipient.length === 0) return null;
-    // Use assistance_currency from first action, fallback to EUR
-    return servicesForRecipient[0]?.assistance_currency || 
-           servicesForRecipient[0]?.service_currency || 
-           'EUR';
+    // Use commission_currency first, fallback to EUR
+    return servicesForRecipient[0]?.commission_currency || 'EUR';
   }, [servicesForRecipient]);
 
   // Handle case change - reset recipient if they're not in new case
@@ -267,8 +265,9 @@ export function InvoiceStepCase({
               {servicesForRecipient.length > 0 ? (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   {servicesForRecipient.map((action, i) => {
-                    const cost = action.assistance_cost || action.service_cost || 0;
-                    const currency = action.assistance_currency || action.service_currency || 'EUR';
+                    // Use commission_cost (საკომისიო) for invoice pricing
+                    const cost = action.commission_cost || 0;
+                    const currency = action.commission_currency || 'EUR';
                     return (
                       <div 
                         key={i} 
@@ -284,7 +283,7 @@ export function InvoiceStepCase({
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 font-medium">
                     <span className="text-xs text-gray-700">ჯამი</span>
                     <span className="text-xs text-blue-600">
-                      {servicesForRecipient.reduce((s, a) => s + (a.assistance_cost || a.service_cost || 0), 0)} {getCurrencySymbol(detectedCurrency || 'EUR')}
+                      {servicesForRecipient.reduce((s, a) => s + (a.commission_cost || 0), 0)} {getCurrencySymbol(detectedCurrency || 'EUR')}
                     </span>
                   </div>
                 </div>
