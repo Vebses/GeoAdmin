@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SlidePanel } from '@/components/ui/slide-panel';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ourCompanySchema, type OurCompanyFormData } from '@/lib/utils/validation';
 import { cn } from '@/lib/utils';
+import { Upload, X, Image as ImageIcon, PenTool, Stamp, Loader2 } from 'lucide-react';
 import type { OurCompany } from '@/types';
 
 interface CompanyEditPanelProps {
@@ -20,6 +21,138 @@ interface CompanyEditPanelProps {
   loading?: boolean;
 }
 
+interface ImageUploadProps {
+  label: string;
+  icon: React.ReactNode;
+  imageUrl: string | null;
+  imageType: 'logo' | 'signature' | 'stamp';
+  companyId?: string;
+  onUpload: (url: string) => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}
+
+function ImageUploadField({
+  label,
+  icon,
+  imageUrl,
+  imageType,
+  companyId,
+  onUpload,
+  onRemove,
+  disabled,
+}: ImageUploadProps) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !companyId) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', imageType);
+
+      const response = await fetch(`/api/our-companies/${companyId}/images`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        onUpload(result.data.url);
+      } else {
+        console.error('Upload failed:', result.error);
+        alert(result.error?.message || 'ატვირთვა ვერ მოხერხდა');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('ატვირთვა ვერ მოხერხდა');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!companyId) return;
+    
+    try {
+      const response = await fetch(`/api/our-companies/${companyId}/images?type=${imageType}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        onRemove();
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-1.5">
+        {icon}
+        {label}
+      </Label>
+      <div className="relative">
+        {imageUrl ? (
+          <div className="relative group">
+            <div className="w-full h-24 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center">
+              <img 
+                src={imageUrl} 
+                alt={label}
+                className="max-w-full max-h-full object-contain p-2"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={disabled}
+              className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <label className={cn(
+            "flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+            disabled || !companyId
+              ? "border-gray-200 bg-gray-50 cursor-not-allowed"
+              : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"
+          )}>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+              onChange={handleUpload}
+              disabled={disabled || !companyId || uploading}
+              className="hidden"
+            />
+            {uploading ? (
+              <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+            ) : (
+              <>
+                <Upload className="h-5 w-5 text-gray-400 mb-1" />
+                <span className="text-[10px] text-gray-500">
+                  {companyId ? 'ატვირთეთ სურათი' : 'ჯერ შეინახეთ კომპანია'}
+                </span>
+              </>
+            )}
+          </label>
+        )}
+      </div>
+      <p className="text-[10px] text-gray-400">PNG, JPG, WebP, SVG (მაქს. 2MB)</p>
+    </div>
+  );
+}
+
 export function CompanyEditPanel({
   company,
   isOpen,
@@ -28,6 +161,9 @@ export function CompanyEditPanel({
   loading = false,
 }: CompanyEditPanelProps) {
   const isEdit = !!company;
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [stampUrl, setStampUrl] = useState<string | null>(null);
 
   const {
     register,
@@ -53,6 +189,9 @@ export function CompanyEditPanel({
       account_gel: '',
       account_usd: '',
       account_eur: '',
+      logo_url: '',
+      signature_url: '',
+      stamp_url: '',
       invoice_prefix: 'INV',
       invoice_footer_text: '',
       is_default: false,
@@ -79,10 +218,16 @@ export function CompanyEditPanel({
           account_gel: company.account_gel || '',
           account_usd: company.account_usd || '',
           account_eur: company.account_eur || '',
+          logo_url: company.logo_url || '',
+          signature_url: company.signature_url || '',
+          stamp_url: company.stamp_url || '',
           invoice_prefix: company.invoice_prefix || 'INV',
           invoice_footer_text: company.invoice_footer_text || '',
           is_default: company.is_default || false,
         });
+        setLogoUrl(company.logo_url || null);
+        setSignatureUrl(company.signature_url || null);
+        setStampUrl(company.stamp_url || null);
       } else {
         reset({
           name: '',
@@ -99,15 +244,25 @@ export function CompanyEditPanel({
           account_gel: '',
           account_usd: '',
           account_eur: '',
+          logo_url: '',
+          signature_url: '',
+          stamp_url: '',
           invoice_prefix: 'INV',
           invoice_footer_text: '',
           is_default: false,
         });
+        setLogoUrl(null);
+        setSignatureUrl(null);
+        setStampUrl(null);
       }
     }
   }, [isOpen, company, reset]);
 
   const onSubmit = (data: OurCompanyFormData) => {
+    // Include image URLs in form data
+    data.logo_url = logoUrl || '';
+    data.signature_url = signatureUrl || '';
+    data.stamp_url = stampUrl || '';
     onSave(data);
   };
 
@@ -185,6 +340,68 @@ export function CompanyEditPanel({
               <span className="text-sm text-gray-700">ძირითადი კომპანია</span>
               <span className="text-xs text-gray-400">(გამოიყენება ინვოისებში ნაგულისხმევად)</span>
             </label>
+          </div>
+        </div>
+
+        {/* Company Images - Logo, Signature, Stamp */}
+        <div>
+          <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+            სურათები (ინვოისისთვის)
+          </h3>
+          {!isEdit && (
+            <p className="text-xs text-amber-600 mb-3">
+              ⚠️ სურათების ასატვირთად ჯერ შეინახეთ კომპანია
+            </p>
+          )}
+          <div className="grid grid-cols-3 gap-4">
+            <ImageUploadField
+              label="ლოგო"
+              icon={<ImageIcon className="h-3.5 w-3.5" />}
+              imageUrl={logoUrl}
+              imageType="logo"
+              companyId={company?.id}
+              onUpload={(url) => {
+                setLogoUrl(url);
+                setValue('logo_url', url);
+              }}
+              onRemove={() => {
+                setLogoUrl(null);
+                setValue('logo_url', '');
+              }}
+              disabled={loading}
+            />
+            <ImageUploadField
+              label="ხელმოწერა"
+              icon={<PenTool className="h-3.5 w-3.5" />}
+              imageUrl={signatureUrl}
+              imageType="signature"
+              companyId={company?.id}
+              onUpload={(url) => {
+                setSignatureUrl(url);
+                setValue('signature_url', url);
+              }}
+              onRemove={() => {
+                setSignatureUrl(null);
+                setValue('signature_url', '');
+              }}
+              disabled={loading}
+            />
+            <ImageUploadField
+              label="ბეჭედი"
+              icon={<Stamp className="h-3.5 w-3.5" />}
+              imageUrl={stampUrl}
+              imageType="stamp"
+              companyId={company?.id}
+              onUpload={(url) => {
+                setStampUrl(url);
+                setValue('stamp_url', url);
+              }}
+              onRemove={() => {
+                setStampUrl(null);
+                setValue('stamp_url', '');
+              }}
+              disabled={loading}
+            />
           </div>
         </div>
 

@@ -128,10 +128,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    // Generate unique filename - sanitize to remove non-ASCII characters
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
     const timestamp = Date.now();
-    const uniqueName = `${caseId}/${type}/${timestamp}_${file.name}`;
+    // Get base name without extension
+    const baseName = file.name.replace(/\.[^/.]+$/, '');
+    // Sanitize: replace ALL non-ASCII chars (including Georgian), keep only alphanumeric and -_
+    const sanitizedName = baseName
+      .normalize('NFD') // Normalize unicode
+      .replace(/[\u0080-\uFFFF]/g, '') // Remove all non-ASCII characters
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Keep only safe characters
+      .replace(/_+/g, '_') // Collapse multiple underscores
+      .replace(/^_|_$/g, '') // Trim leading/trailing underscores
+      .substring(0, 50) || 'file'; // Limit length, default to 'file' if empty
+    const uniqueName = `${caseId}/${type}/${timestamp}_${sanitizedName}.${ext}`;
 
     // Upload to Supabase Storage
     const fileBuffer = await file.arrayBuffer();

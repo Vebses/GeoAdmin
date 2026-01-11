@@ -219,6 +219,7 @@ export async function POST(request: Request) {
         total: service.total,
         sort_order: index,
       }));
+      }));
 
       const { error: servicesError } = await supabase
         .from('invoice_services')

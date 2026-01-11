@@ -67,18 +67,8 @@ export function InvoiceServicesEditor({
     const actionsToUse = relevantActions.length > 0 ? relevantActions : caseActions;
 
     const newServices: InvoiceServiceFormData[] = actionsToUse.map((action) => {
-      // Determine which cost to use based on currency
-      let unitPrice = 0;
-      if (currency === 'GEL' && action.service_currency === 'GEL') {
-        unitPrice = action.service_cost || 0;
-      } else if (currency === 'EUR' && action.assistance_currency === 'EUR') {
-        unitPrice = action.assistance_cost || 0;
-      } else if (currency === 'USD' && action.assistance_currency === 'USD') {
-        unitPrice = action.assistance_cost || 0;
-      } else {
-        // Default to assistance cost for EUR
-        unitPrice = action.assistance_cost || action.service_cost || 0;
-      }
+      // Use commission_cost (საკომისიო) for invoice pricing
+      const unitPrice = action.commission_cost || 0;
 
       // Use service_name as description
       const description = action.service_description 

@@ -343,9 +343,19 @@ export function InvoiceStepDetails({
               {/* Header with Logo */}
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="w-16 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white font-bold text-[10px] shadow">
-                    {selectedSender?.name?.substring(0, 3).toUpperCase() || 'LOGO'}
-                  </div>
+                  {selectedSender?.logo_url ? (
+                    <div className="w-20 h-10 flex items-center justify-start">
+                      <img 
+                        src={selectedSender.logo_url} 
+                        alt="Logo" 
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white font-bold text-[10px] shadow">
+                      {selectedSender?.name?.substring(0, 3).toUpperCase() || 'LOGO'}
+                    </div>
+                  )}
                   <div className="mt-2 text-gray-600 space-y-0.5 text-[10px]">
                     <p className="font-semibold text-gray-900">{selectedSender?.legal_name || selectedSender?.name || '—'}</p>
                     {selectedSender?.id_code && <p>ს/კ: {selectedSender.id_code}</p>}
@@ -433,12 +443,32 @@ export function InvoiceStepDetails({
               
               {/* Signature & Stamp */}
               <div className="flex justify-end items-center gap-4 pt-2">
-                <div className="w-16 h-6 border border-dashed border-gray-300 rounded flex items-center justify-center text-[8px] text-gray-400">
-                  {language === 'ka' ? 'ხელმოწერა' : 'Signature'}
-                </div>
-                <div className="w-10 h-10 border border-dashed border-gray-300 rounded-full flex items-center justify-center text-[8px] text-gray-400">
-                  {language === 'ka' ? 'ბეჭედი' : 'Stamp'}
-                </div>
+                {selectedSender?.signature_url ? (
+                  <div className="w-20 h-8 flex items-center justify-center">
+                    <img 
+                      src={selectedSender.signature_url} 
+                      alt="Signature" 
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-6 border border-dashed border-gray-300 rounded flex items-center justify-center text-[8px] text-gray-400">
+                    {language === 'ka' ? 'ხელმოწერა' : 'Signature'}
+                  </div>
+                )}
+                {selectedSender?.stamp_url ? (
+                  <div className="w-12 h-12 flex items-center justify-center">
+                    <img 
+                      src={selectedSender.stamp_url} 
+                      alt="Stamp" 
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 border border-dashed border-gray-300 rounded-full flex items-center justify-center text-[8px] text-gray-400">
+                    {language === 'ka' ? 'ბეჭედი' : 'Stamp'}
+                  </div>
+                )}
               </div>
             </div>
           </div>

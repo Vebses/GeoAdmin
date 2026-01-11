@@ -426,9 +426,9 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
   // Parse services
   const services = invoice.services || [];
   
-  // Calculate totals
-  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
-  const franchiseAmount = invoice.franchise_amount || 0;
+  // Calculate totals - use 'amount' field from services, 'franchise' from invoice
+  const subtotal = services.reduce((sum, s) => sum + ((s as any).amount || s.total || 0), 0);
+  const franchiseAmount = (invoice as any).franchise || 0;
   const total = subtotal - franchiseAmount;
   
   // Get bank account based on currency
@@ -528,7 +528,7 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
                 {String(index + 1).padStart(2, '0')}
               </Text>
               <Text style={[styles.tableCell, styles.colService]}>
-                {service.description}
+                {(service as any).name || service.description}
               </Text>
               <Text style={[styles.tableCell, styles.colQty]}>
                 {service.quantity || 1}
@@ -537,7 +537,7 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
                 {formatCurrency(service.unit_price || 0, currency)}
               </Text>
               <Text style={[styles.tableCellBold, styles.colAmount]}>
-                {formatCurrency(service.total || 0, currency)}
+                {formatCurrency((service as any).amount || service.total || 0, currency)}
               </Text>
             </View>
           ))}
