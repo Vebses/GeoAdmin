@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Update last login timestamp
     if (userProfile) {
-      await supabase
+      await (supabase as any)
         .from('users')
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', data.user.id);
