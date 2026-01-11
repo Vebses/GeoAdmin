@@ -198,7 +198,9 @@ export function InvoiceServicesEditor({
                         {service.description && caseActions.some(a => 
                           service.description.includes(a.service_name)
                         ) && (
-                          <Zap className="h-3 w-3 text-blue-500 flex-shrink-0" title="ავტომატურად შევსებული" />
+                          <span title="ავტომატურად შევსებული">
+                            <Zap className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                          </span>
                         )}
                       </div>
                     )}

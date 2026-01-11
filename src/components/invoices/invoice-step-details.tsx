@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { Mail, FileText, Download, Printer, ExternalLink, Paperclip, Languages } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -141,6 +141,7 @@ export function InvoiceStepDetails({
     );
     onEmailSubjectChange(template.subject);
     onEmailBodyChange(template.body);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, selectedCase?.case_number, selectedCase?.patient_name, selectedSender?.name]);
 
   // Attachment info

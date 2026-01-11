@@ -223,39 +223,15 @@ export function InvoiceViewPanel({
             </div>
           </div>
 
-          {/* Services */}
+          {/* Services (includes franchise and totals) */}
           <InvoiceServicesEditor
             services={services}
             onChange={() => {}}
             currency={invoice.currency}
+            franchiseAmount={invoice.franchise_amount || 0}
+            onFranchiseChange={() => {}}
             readOnly
           />
-
-          {/* Totals */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">ჯამი:</span>
-                <span className="font-medium text-gray-900">
-                  {formatCurrency(invoice.subtotal, invoice.currency)}
-                </span>
-              </div>
-              {invoice.franchise_amount > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">ფრანშიზა:</span>
-                  <span className="font-medium text-red-600">
-                    -{formatCurrency(invoice.franchise_amount, invoice.currency)}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                <span className="text-sm font-semibold text-gray-900">სულ გადასახდელი:</span>
-                <span className="text-lg font-bold text-gray-900">
-                  {formatCurrency(invoice.total, invoice.currency)}
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* Payment Info */}
           {invoice.status === 'paid' && invoice.paid_at && (
