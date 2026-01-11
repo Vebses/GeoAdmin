@@ -9,18 +9,19 @@ import {
 } from '@/lib/api/our-companies';
 import type { OurCompanyFormData } from '@/types';
 
-export const OUR_COMPANIES_QUERY_KEY = ['our-companies'];
+// Use string key - will be used as first element in query key array
+export const OUR_COMPANIES_KEY = 'our-companies';
 
 export function useOurCompanies() {
   return useQuery({
-    queryKey: OUR_COMPANIES_QUERY_KEY,
+    queryKey: [OUR_COMPANIES_KEY, 'list'],
     queryFn: getOurCompanies,
   });
 }
 
 export function useOurCompany(id: string | null) {
   return useQuery({
-    queryKey: [OUR_COMPANIES_QUERY_KEY, id],
+    queryKey: [OUR_COMPANIES_KEY, 'detail', id],
     queryFn: () => getOurCompany(id!),
     enabled: !!id,
   });
@@ -32,7 +33,8 @@ export function useCreateOurCompany() {
   return useMutation({
     mutationFn: (data: OurCompanyFormData) => createOurCompany(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: OUR_COMPANIES_QUERY_KEY });
+      // Invalidate all our-companies queries
+      queryClient.invalidateQueries({ queryKey: [OUR_COMPANIES_KEY] });
       toast.success('კომპანია შეიქმნა');
     },
     onError: (error: Error) => {
@@ -48,7 +50,8 @@ export function useUpdateOurCompany() {
     mutationFn: ({ id, data }: { id: string; data: OurCompanyFormData }) => 
       updateOurCompany(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: OUR_COMPANIES_QUERY_KEY });
+      // Invalidate all our-companies queries
+      queryClient.invalidateQueries({ queryKey: [OUR_COMPANIES_KEY] });
       toast.success('კომპანია განახლდა');
     },
     onError: (error: Error) => {
@@ -63,7 +66,8 @@ export function useDeleteOurCompany() {
   return useMutation({
     mutationFn: (id: string) => deleteOurCompany(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: OUR_COMPANIES_QUERY_KEY });
+      // Invalidate all our-companies queries
+      queryClient.invalidateQueries({ queryKey: [OUR_COMPANIES_KEY] });
       toast.success('კომპანია წაიშალა');
     },
     onError: (error: Error) => {
