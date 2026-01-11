@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { FileDropzone, FilePreview, formatFileSize, getFileIcon } from '@/components/ui/file-dropzone';
+import { FileDropzone, formatFileSize, getFileIcon } from '@/components/ui/file-dropzone';
 import { useCaseDocuments, useUploadCaseDocument, useDeleteCaseDocument } from '@/hooks/use-case-documents';
 import { downloadDocument } from '@/lib/api/case-documents';
 import { cn } from '@/lib/utils/cn';
@@ -39,23 +39,36 @@ interface CaseDocumentsProps {
 }
 
 export function CaseDocuments({ caseId, readOnly = false }: CaseDocumentsProps) {
-  const { data: documents, isLoading } = useCaseDocuments(caseId);
+  const { data: documents, isLoading, error } = useCaseDocuments(caseId);
   const uploadMutation = useUploadCaseDocument(caseId);
   const deleteMutation = useDeleteCaseDocument(caseId);
   
   const [deleteDoc, setDeleteDoc] = useState<CaseDocumentWithRelations | null>(null);
+  // Track uploading state per document type
+  const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
 
   const handleUpload = useCallback(
     async (files: File[], type: DocumentType) => {
-      for (const file of files) {
-        await uploadMutation.mutateAsync({ file, type });
+      setUploadingType(type);
+      try {
+        for (const file of files) {
+          await uploadMutation.mutateAsync({ file, type });
+        }
+      } catch (err) {
+        console.error('Upload error:', err);
+      } finally {
+        setUploadingType(null);
       }
     },
     [uploadMutation]
   );
 
   const handleDelete = async (docId: string) => {
-    await deleteMutation.mutateAsync(docId);
+    try {
+      await deleteMutation.mutateAsync(docId);
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
     setDeleteDoc(null);
   };
 
@@ -83,6 +96,14 @@ export function CaseDocuments({ caseId, readOnly = false }: CaseDocumentsProps) 
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 rounded-lg text-sm text-red-600">
+        დოკუმენტების ჩატვირთვა ვერ მოხერხდა
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {(['patient', 'original', 'medical'] as DocumentType[]).map((type) => (
@@ -91,7 +112,7 @@ export function CaseDocuments({ caseId, readOnly = false }: CaseDocumentsProps) 
           type={type}
           documents={documentsByType[type]}
           readOnly={readOnly}
-          isUploading={uploadMutation.isPending}
+          isUploading={uploadingType === type}
           onUpload={(files) => handleUpload(files, type)}
           onDelete={setDeleteDoc}
           onDownload={(doc) => downloadDocument(doc)}
@@ -148,7 +169,7 @@ function DocumentTypeSection({
 
       {/* Content */}
       <div className="p-4">
-        {/* Upload Dropzone */}
+        {/* Upload Dropzone - only shows loading for this specific section */}
         {!readOnly && (
           <FileDropzone
             onDrop={onUpload}
@@ -257,7 +278,10 @@ function DocumentItem({ document, readOnly, onDelete, onDownload }: DocumentItem
             size="sm"
             variant="ghost"
             className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
           >
             <Trash2 className="h-4 w-4" />
           </Button>

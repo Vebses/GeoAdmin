@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, ArrowRight, Save, X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InvoiceStepCase } from './invoice-step-case';
@@ -55,15 +55,39 @@ export function InvoiceCreateWizard({
   const [attachMedicalDocs, setAttachMedicalDocs] = useState(false);
   const [notes, setNotes] = useState('');
 
-  const selectedCase = cases.find((c) => c.id === selectedCaseId);
-  const selectedRecipient = partners.find((p) => p.id === selectedRecipientId);
+  // Selected entities
+  const selectedCase = useMemo(() => 
+    cases.find((c) => c.id === selectedCaseId) || null, 
+    [cases, selectedCaseId]
+  );
+  const selectedRecipient = useMemo(() => 
+    partners.find((p) => p.id === selectedRecipientId) || null, 
+    [partners, selectedRecipientId]
+  );
+  const selectedSender = useMemo(() => 
+    ourCompanies.find((c) => c.id === selectedSenderId) || null, 
+    [ourCompanies, selectedSenderId]
+  );
 
-  // Set default sender if there's only one company
+  // Get relevant actions for selected recipient
+  const relevantActions = useMemo(() => {
+    if (!selectedCase?.actions?.length || !selectedRecipientId) return [];
+    return selectedCase.actions.filter((a) => a.executor_id === selectedRecipientId);
+  }, [selectedCase, selectedRecipientId]);
+
+  // Detect currency from relevant actions
+  const detectedCurrency = useMemo((): CurrencyCode => {
+    if (relevantActions.length === 0) return 'EUR';
+    const firstAction = relevantActions[0];
+    // Use assistance_currency first, then service_currency, default to EUR
+    return (firstAction.assistance_currency || firstAction.service_currency || 'EUR') as CurrencyCode;
+  }, [relevantActions]);
+
+  // Set default sender if there's only one company or a default company
   useEffect(() => {
     if (ourCompanies.length === 1 && !selectedSenderId) {
       setSelectedSenderId(ourCompanies[0].id);
     }
-    // Set default sender if there's a default company
     const defaultCompany = ourCompanies.find((c) => c.is_default);
     if (defaultCompany && !selectedSenderId) {
       setSelectedSenderId(defaultCompany.id);
@@ -72,25 +96,26 @@ export function InvoiceCreateWizard({
 
   // Pre-fill recipient email when recipient changes
   useEffect(() => {
-    if (selectedRecipient?.email && !recipientEmail) {
+    if (selectedRecipient?.email) {
       setRecipientEmail(selectedRecipient.email);
     }
-  }, [selectedRecipient, recipientEmail]);
+  }, [selectedRecipient]);
 
-  // Auto-populate services when moving to step 2
+  // Auto-set currency when recipient changes (from actions)
   useEffect(() => {
-    if (step === 2 && services.length === 0 && selectedCase?.actions?.length) {
-      const caseActions = selectedCase.actions;
-      const relevantActions = selectedRecipientId
-        ? caseActions.filter((a) => a.executor_id === selectedRecipientId)
-        : caseActions;
+    if (selectedRecipientId && detectedCurrency) {
+      setCurrency(detectedCurrency);
+    }
+  }, [selectedRecipientId, detectedCurrency]);
 
-      const actionsToUse = relevantActions.length > 0 ? relevantActions : caseActions;
-      
-      const newServices: InvoiceServiceFormData[] = actionsToUse.map((action) => {
+  // Auto-populate services when moving to step 2 or when recipient changes
+  useEffect(() => {
+    if (step === 2 && relevantActions.length > 0 && services.length === 0) {
+      const newServices: InvoiceServiceFormData[] = relevantActions.map((action) => {
+        // Determine which cost to use based on the detected currency
         let unitPrice = 0;
-        if (currency === 'GEL') {
-          unitPrice = action.service_cost || 0;
+        if (detectedCurrency === 'GEL') {
+          unitPrice = action.service_cost || action.assistance_cost || 0;
         } else {
           unitPrice = action.assistance_cost || action.service_cost || 0;
         }
@@ -110,9 +135,9 @@ export function InvoiceCreateWizard({
       
       setServices(newServices);
     }
-  }, [step, selectedCase, selectedRecipientId, currency, services.length]);
+  }, [step, relevantActions, detectedCurrency, services.length]);
 
-  // Reset form when dialog opens/closes
+  // Reset form when dialog closes
   useEffect(() => {
     if (!isOpen) {
       setStep(1);
@@ -132,6 +157,12 @@ export function InvoiceCreateWizard({
       setNotes('');
     }
   }, [isOpen]);
+
+  // Reset services when case or recipient changes
+  const handleRecipientChange = (recipientId: string | null) => {
+    setSelectedRecipientId(recipientId);
+    setServices([]); // Reset services to trigger re-population
+  };
 
   const canProceedToStep2 = selectedCaseId && selectedRecipientId && selectedSenderId;
   const canSave = canProceedToStep2 && services.length > 0;
@@ -174,7 +205,7 @@ export function InvoiceCreateWizard({
       />
 
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 w-full max-w-4xl bg-white shadow-xl z-50 flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-full max-w-5xl bg-white shadow-xl z-50 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -228,7 +259,7 @@ export function InvoiceCreateWizard({
               selectedRecipientId={selectedRecipientId}
               selectedSenderId={selectedSenderId}
               onCaseChange={setSelectedCaseId}
-              onRecipientChange={setSelectedRecipientId}
+              onRecipientChange={handleRecipientChange}
               onSenderChange={setSelectedSenderId}
             />
           ) : (
@@ -246,6 +277,11 @@ export function InvoiceCreateWizard({
               notes={notes}
               caseActions={selectedCase?.actions || []}
               recipientId={selectedRecipientId || undefined}
+              // Pass entities for live preview
+              selectedCase={selectedCase}
+              selectedRecipient={selectedRecipient}
+              selectedSender={selectedSender}
+              // Callbacks
               onCurrencyChange={setCurrency}
               onLanguageChange={setLanguage}
               onFranchiseAmountChange={setFranchiseAmount}

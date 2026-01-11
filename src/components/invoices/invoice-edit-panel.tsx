@@ -10,7 +10,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { InvoiceServicesEditor } from './invoice-services-editor';
 import { InvoiceStatusBadge } from './invoice-status-badge';
-import { formatCurrency } from '@/lib/utils/format';
 import type { 
   InvoiceWithRelations,
   InvoiceFormData,
@@ -104,11 +103,6 @@ export function InvoiceEditPanel({
 
   if (!isOpen || !invoice) return null;
 
-  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
-  const total = Math.max(0, subtotal - franchiseAmount);
-
-  const currencySymbol = currencies.find((c) => c.value === currency)?.symbol || '€';
-
   const handleSave = async () => {
     const data: Partial<InvoiceFormData> = {
       status,
@@ -166,7 +160,7 @@ export function InvoiceEditPanel({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Status & Basic Info */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label className="text-xs">სტატუსი</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as InvoiceStatus)}>
@@ -214,19 +208,6 @@ export function InvoiceEditPanel({
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs">ფრანშიზა ({currencySymbol})</Label>
-              <Input
-                type="number"
-                value={franchiseAmount || ''}
-                onChange={(e) => setFranchiseAmount(parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                min={0}
-                step="0.01"
-                className="h-9 text-xs"
-              />
-            </div>
           </div>
 
           {/* Companies */}
@@ -264,38 +245,14 @@ export function InvoiceEditPanel({
             </div>
           </div>
 
-          {/* Services */}
+          {/* Services (includes franchise and totals) */}
           <InvoiceServicesEditor
             services={services}
             onChange={setServices}
             currency={currency}
+            franchiseAmount={franchiseAmount}
+            onFranchiseChange={setFranchiseAmount}
           />
-
-          {/* Totals */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">ჯამი:</span>
-                <span className="font-medium text-gray-900">
-                  {formatCurrency(subtotal, currency)}
-                </span>
-              </div>
-              {franchiseAmount > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">ფრანშიზა:</span>
-                  <span className="font-medium text-red-600">
-                    -{formatCurrency(franchiseAmount, currency)}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                <span className="text-sm font-semibold text-gray-900">სულ გადასახდელი:</span>
-                <span className="text-xl font-bold text-gray-900">
-                  {formatCurrency(total, currency)}
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* Email Settings */}
           <div className="space-y-4">
@@ -340,7 +297,7 @@ export function InvoiceEditPanel({
                   <Checkbox
                     id="edit-attach-patient"
                     checked={attachPatientDocs}
-                    onCheckedChange={(checked) => setAttachPatientDocs(!!checked)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => setAttachPatientDocs(!!checked)}
                   />
                   <Label htmlFor="edit-attach-patient" className="text-xs text-gray-700 cursor-pointer">
                     პაციენტის დოკუმენტები
@@ -350,7 +307,7 @@ export function InvoiceEditPanel({
                   <Checkbox
                     id="edit-attach-original"
                     checked={attachOriginalDocs}
-                    onCheckedChange={(checked) => setAttachOriginalDocs(!!checked)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => setAttachOriginalDocs(!!checked)}
                   />
                   <Label htmlFor="edit-attach-original" className="text-xs text-gray-700 cursor-pointer">
                     ორიგინალი დოკუმენტები
@@ -360,7 +317,7 @@ export function InvoiceEditPanel({
                   <Checkbox
                     id="edit-attach-medical"
                     checked={attachMedicalDocs}
-                    onCheckedChange={(checked) => setAttachMedicalDocs(!!checked)}
+                    onCheckedChange={(checked: boolean | 'indeterminate') => setAttachMedicalDocs(!!checked)}
                   />
                   <Label htmlFor="edit-attach-medical" className="text-xs text-gray-700 cursor-pointer">
                     სამედიცინო დოკუმენტები

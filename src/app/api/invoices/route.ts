@@ -156,7 +156,7 @@ export async function POST(request: Request) {
     const invoiceNumber = `${prefix}-${year}${month}-${String(nextNumber).padStart(4, '0')}`;
 
     // Calculate totals
-    const subtotal = invoiceData.services.reduce((sum, service) => sum + service.total, 0);
+    const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);
     const franchiseAmount = invoiceData.franchise_amount || 0;
     const total = subtotal - franchiseAmount;
 
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
 
     // Create services
     if (invoiceData.services.length > 0) {
-      const servicesInsertData = invoiceData.services.map((service, index) => ({
+      const servicesInsertData = invoiceData.services.map((service: { description: string; quantity?: number; unit_price: number; total: number }, index: number) => ({
         invoice_id: invoiceId,
         description: service.description,
         quantity: service.quantity || 1,

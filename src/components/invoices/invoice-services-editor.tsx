@@ -1,8 +1,8 @@
 'use client';
 
-import { Plus, Wand2 } from 'lucide-react';
+import { Plus, Wand2, X, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { InvoiceServiceRow } from './invoice-service-row';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils/cn';
 import type { InvoiceServiceFormData, CurrencyCode, CaseActionWithRelations } from '@/types';
 
@@ -10,6 +10,8 @@ interface InvoiceServicesEditorProps {
   services: InvoiceServiceFormData[];
   onChange: (services: InvoiceServiceFormData[]) => void;
   currency: CurrencyCode;
+  franchiseAmount: number;
+  onFranchiseChange: (amount: number) => void;
   caseActions?: CaseActionWithRelations[];
   recipientId?: string;
   readOnly?: boolean;
@@ -19,6 +21,8 @@ export function InvoiceServicesEditor({
   services,
   onChange,
   currency,
+  franchiseAmount,
+  onFranchiseChange,
   caseActions = [],
   recipientId,
   readOnly = false,
@@ -33,9 +37,17 @@ export function InvoiceServicesEditor({
     onChange([...services, newService]);
   };
 
-  const handleUpdateService = (index: number, data: Partial<InvoiceServiceFormData>) => {
+  const handleUpdateService = (index: number, field: keyof InvoiceServiceFormData, value: string | number) => {
     const updated = [...services];
-    updated[index] = { ...updated[index], ...data };
+    updated[index] = { ...updated[index], [field]: value };
+    
+    // Auto-calculate total when quantity or unit_price changes
+    if (field === 'quantity' || field === 'unit_price') {
+      const quantity = field === 'quantity' ? Number(value) : updated[index].quantity;
+      const unitPrice = field === 'unit_price' ? Number(value) : updated[index].unit_price;
+      updated[index].total = quantity * unitPrice;
+    }
+    
     onChange(updated);
   };
 
@@ -68,7 +80,7 @@ export function InvoiceServicesEditor({
         unitPrice = action.assistance_cost || action.service_cost || 0;
       }
 
-      // Use service_name as description (since we only have description field now)
+      // Use service_name as description
       const description = action.service_description 
         ? `${action.service_name} - ${action.service_description}`
         : action.service_name;
@@ -85,6 +97,7 @@ export function InvoiceServicesEditor({
   };
 
   const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
+  const total = Math.max(0, subtotal - franchiseAmount);
 
   const currencySymbol = {
     GEL: '₾',
@@ -128,77 +141,201 @@ export function InvoiceServicesEditor({
       </div>
 
       {/* Services Table */}
-      {services.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg px-4 py-8 text-center">
-          <p className="text-xs text-gray-500 mb-2">სერვისები არ არის დამატებული</p>
-          {!readOnly && caseActions.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={handleAutoPopulate}
-            >
-              <Wand2 className="h-3 w-3 mr-1" />
-              შეავსეთ ქეისის ქმედებებიდან
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="py-2 pr-3 pl-4 text-left text-[10px] font-semibold text-gray-500 uppercase">
-                  სერვისი
-                </th>
-                <th className="py-2 px-3 text-center text-[10px] font-semibold text-gray-500 uppercase w-20">
-                  რაოდ.
-                </th>
-                <th className="py-2 px-3 text-right text-[10px] font-semibold text-gray-500 uppercase w-24">
-                  ფასი
-                </th>
-                <th className="py-2 px-3 text-right text-[10px] font-semibold text-gray-500 uppercase w-24">
-                  თანხა
-                </th>
-                {!readOnly && (
-                  <th className="py-2 pl-3 pr-4 w-10" />
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {services.map((service, index) => (
-                <InvoiceServiceRow
-                  key={index}
-                  service={service}
-                  index={index}
-                  onChange={handleUpdateService}
-                  onRemove={handleRemoveService}
-                  readOnly={readOnly}
-                />
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50 border-t border-gray-200">
-                <td colSpan={readOnly ? 3 : 4} className="py-2 px-4 text-right">
-                  <span className="text-xs font-semibold text-gray-700">სულ:</span>
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="py-2 pr-3 pl-4 text-left text-[10px] font-semibold text-gray-500 uppercase">
+                სერვისი
+              </th>
+              <th className="py-2 px-3 text-center text-[10px] font-semibold text-gray-500 uppercase w-16">
+                რაოდ.
+              </th>
+              <th className="py-2 px-3 text-right text-[10px] font-semibold text-gray-500 uppercase w-24">
+                ფასი
+              </th>
+              <th className="py-2 px-3 text-right text-[10px] font-semibold text-gray-500 uppercase w-24">
+                თანხა
+              </th>
+              {!readOnly && (
+                <th className="py-2 pl-3 pr-4 w-10" />
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {services.length === 0 ? (
+              <tr>
+                <td colSpan={readOnly ? 4 : 5} className="py-6 text-center">
+                  <p className="text-xs text-gray-500 mb-2">სერვისები არ არის დამატებული</p>
+                  {!readOnly && caseActions.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={handleAutoPopulate}
+                    >
+                      <Wand2 className="h-3 w-3 mr-1" />
+                      შეავსეთ ქეისის ქმედებებიდან
+                    </Button>
+                  )}
                 </td>
-                <td className={cn('py-2 text-right', readOnly ? 'pr-4' : 'pr-3')}>
-                  <span className="text-sm font-bold text-gray-900">
-                    {currencySymbol}{subtotal.toFixed(2)}
+              </tr>
+            ) : (
+              services.map((service, index) => (
+                <tr key={index} className="group hover:bg-gray-50">
+                  <td className="py-2 pr-3 pl-4">
+                    {readOnly ? (
+                      <span className="text-xs text-gray-700">{service.description}</span>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={service.description}
+                          onChange={(e) => handleUpdateService(index, 'description', e.target.value)}
+                          placeholder="სერვისის აღწერა..."
+                          className="h-8 text-xs border-transparent bg-transparent hover:border-gray-200 focus:border-blue-400 focus:bg-white"
+                        />
+                        {service.description && caseActions.some(a => 
+                          service.description.includes(a.service_name)
+                        ) && (
+                          <Zap className="h-3 w-3 text-blue-500 flex-shrink-0" title="ავტომატურად შევსებული" />
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-center">
+                    {readOnly ? (
+                      <span className="text-xs text-gray-700">{service.quantity}</span>
+                    ) : (
+                      <Input
+                        type="number"
+                        value={service.quantity}
+                        onChange={(e) => handleUpdateService(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        min={1}
+                        className="h-8 text-xs text-center border-transparent bg-transparent hover:border-gray-200 focus:border-blue-400 focus:bg-white w-full"
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-right">
+                    {readOnly ? (
+                      <span className="text-xs text-gray-700">{service.unit_price}</span>
+                    ) : (
+                      <Input
+                        type="number"
+                        value={service.unit_price}
+                        onChange={(e) => handleUpdateService(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step="0.01"
+                        className="h-8 text-xs text-right border-transparent bg-transparent hover:border-gray-200 focus:border-blue-400 focus:bg-white w-full"
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-right">
+                    <span className="text-xs font-medium text-gray-900">
+                      {service.total?.toFixed(2)} {currencySymbol}
+                    </span>
+                  </td>
+                  {!readOnly && (
+                    <td className="py-2 pl-3 pr-4">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveService(index)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
+
+            {/* FRANCHISE ROW - Always visible as static row */}
+            <tr className="bg-red-50 border-t border-red-100">
+              <td className="py-2 pr-3 pl-4">
+                <span className="text-xs font-medium text-red-700">ფრანჩიზა</span>
+              </td>
+              <td className="py-2 px-3 text-center">
+                <span className="text-xs text-red-500">—</span>
+              </td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-xs text-red-500">−</span>
+              </td>
+              <td className="py-2 px-3 text-right">
+                {readOnly ? (
+                  <span className="text-xs font-medium text-red-600">
+                    -{franchiseAmount?.toFixed(2) || '0.00'} {currencySymbol}
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-end gap-1">
+                    <span className="text-red-500 text-xs">-</span>
+                    <Input
+                      type="number"
+                      value={franchiseAmount || ''}
+                      onChange={(e) => onFranchiseChange(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      min={0}
+                      step="0.01"
+                      className="h-8 w-20 text-xs text-right border-red-200 bg-white focus:border-red-400"
+                    />
+                    <span className="text-xs text-gray-500">{currencySymbol}</span>
+                  </div>
+                )}
+              </td>
+              {!readOnly && <td className="py-2 pl-3 pr-4" />}
+            </tr>
+          </tbody>
+          
+          {/* Total Footer */}
+          <tfoot>
+            {/* Subtotal */}
+            <tr className="border-t border-gray-200">
+              <td colSpan={readOnly ? 3 : 4} className="py-2 px-4 text-right">
+                <span className="text-xs text-gray-600">ჯამი:</span>
+              </td>
+              <td className={cn('py-2 text-right', readOnly ? 'pr-4' : 'pr-3')}>
+                <span className="text-xs font-medium text-gray-700">
+                  {currencySymbol}{subtotal.toFixed(2)}
+                </span>
+              </td>
+              {!readOnly && <td />}
+            </tr>
+            
+            {/* Franchise Deduction (shown if > 0) */}
+            {franchiseAmount > 0 && (
+              <tr>
+                <td colSpan={readOnly ? 3 : 4} className="py-1 px-4 text-right">
+                  <span className="text-xs text-red-600">ფრანჩიზა:</span>
+                </td>
+                <td className={cn('py-1 text-right', readOnly ? 'pr-4' : 'pr-3')}>
+                  <span className="text-xs font-medium text-red-600">
+                    -{currencySymbol}{franchiseAmount.toFixed(2)}
                   </span>
                 </td>
                 {!readOnly && <td />}
               </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+            )}
+            
+            {/* Final Total */}
+            <tr className="bg-gray-50 border-t border-gray-200">
+              <td colSpan={readOnly ? 3 : 4} className="py-2.5 px-4 text-right">
+                <span className="text-sm font-semibold text-gray-900">სულ გადასახდელი:</span>
+              </td>
+              <td className={cn('py-2.5 text-right', readOnly ? 'pr-4' : 'pr-3')}>
+                <span className="text-lg font-bold text-blue-600">
+                  {currencySymbol}{total.toFixed(2)}
+                </span>
+              </td>
+              {!readOnly && <td />}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
       {/* Help text for auto-populate */}
       {!readOnly && caseActions.length > 0 && services.length === 0 && (
         <p className="text-[10px] text-gray-500 text-center">
-          💡 დააჭირეთ "ავტო-შევსება" ქეისის ქმედებების იმპორტისთვის
+          💡 დააჭირეთ &quot;ავტო-შევსება&quot; ქეისის ქმედებების იმპორტისთვის
         </p>
       )}
     </div>

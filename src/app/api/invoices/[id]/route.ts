@@ -112,7 +112,7 @@ export async function PUT(request: Request, context: RouteContext) {
     let updateObject: Record<string, unknown> = { ...invoiceUpdateData };
     
     if (services && services.length > 0) {
-      const subtotal = services.reduce((sum, service) => sum + service.total, 0);
+      const subtotal = services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);
       const franchiseAmount = updateData.franchise_amount ?? 0;
       updateObject.subtotal = subtotal;
       updateObject.total = Math.max(0, subtotal - franchiseAmount);
@@ -137,7 +137,7 @@ export async function PUT(request: Request, context: RouteContext) {
         .eq('invoice_id', id);
 
       // Insert new services
-      const servicesInsertData = services.map((service, index) => ({
+      const servicesInsertData = services.map((service: { description: string; quantity?: number; unit_price: number; total: number }, index: number) => ({
         invoice_id: id,
         description: service.description,
         quantity: service.quantity || 1,
