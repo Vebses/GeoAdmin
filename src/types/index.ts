@@ -2,6 +2,22 @@ export * from './database';
 
 import type { Tables, Enums } from './database';
 
+// Re-export form data types from validation
+export type {
+  CategoryFormData,
+  PartnerFormData,
+  OurCompanyFormData,
+  CaseFormData,
+  InvoiceFormData,
+  InvoiceServiceFormData,
+  LoginFormData,
+  ForgotPasswordFormData,
+  ResetPasswordFormData,
+  ChangePasswordFormData,
+  UserProfileFormData,
+  CreateUserFormData,
+} from '@/lib/utils/validation';
+
 // Entity types
 export type User = Tables<'users'>;
 export type Category = Tables<'categories'>;
@@ -17,6 +33,11 @@ export type Notification = Tables<'notifications'>;
 export type ActivityLog = Tables<'activity_logs'>;
 export type Setting = Tables<'settings'>;
 export type UserSession = Tables<'user_sessions'>;
+
+// Extended types for categories with partner count
+export interface CategoryWithCount extends Category {
+  partners_count?: number;
+}
 
 // Enum types
 export type UserRole = Enums<'user_role'>;

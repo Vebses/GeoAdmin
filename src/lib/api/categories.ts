@@ -1,4 +1,4 @@
-import type { Category, CategoryFormData } from '@/types';
+import type { Category, CategoryWithCount, CategoryFormData } from '@/types';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -10,9 +10,9 @@ interface ApiResponse<T> {
   };
 }
 
-export async function getCategories(): Promise<Category[]> {
+export async function getCategories(): Promise<CategoryWithCount[]> {
   const response = await fetch('/api/categories');
-  const result: ApiResponse<Category[]> = await response.json();
+  const result: ApiResponse<CategoryWithCount[]> = await response.json();
   
   if (!result.success) {
     throw new Error(result.error?.message || 'კატეგორიების ჩატვირთვა ვერ მოხერხდა');

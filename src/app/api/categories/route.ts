@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { categorySchema } from '@/lib/utils/validation';
-import type { Category } from '@/types';
+import type { Category, CategoryWithCount } from '@/types';
 
 export async function GET() {
   try {
@@ -35,7 +35,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: categories as Category[],
+      data: categories as CategoryWithCount[],
     });
   } catch (error) {
     console.error('Categories GET error:', error);

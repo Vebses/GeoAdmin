@@ -22,6 +22,7 @@ export function CompanyCard({ company, onEdit, onDelete }: CompanyCardProps) {
         {/* Logo placeholder */}
         <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center flex-shrink-0">
           {company.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={company.logo_url}
               alt={company.name}

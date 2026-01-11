@@ -3,12 +3,12 @@
 import { Pencil, Trash2, Shield, Phone, Building2, Truck, Pill, Stethoscope, Briefcase, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import type { Category } from '@/types';
+import type { CategoryWithCount } from '@/types';
 
 interface CategoryCardProps {
-  category: Category;
-  onEdit: (category: Category) => void;
-  onDelete: (category: Category) => void;
+  category: CategoryWithCount;
+  onEdit: (category: CategoryWithCount) => void;
+  onDelete: (category: CategoryWithCount) => void;
 }
 
 const iconMap: Record<string, React.ElementType> = {

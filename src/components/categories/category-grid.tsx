@@ -13,12 +13,12 @@ import {
   useUpdateCategory, 
   useDeleteCategory 
 } from '@/hooks/use-categories';
-import type { Category, CategoryFormData } from '@/types';
+import type { CategoryWithCount, CategoryFormData } from '@/types';
 
 export function CategoryGrid() {
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingCategory, setEditingCategory] = useState<CategoryWithCount | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [deleteCategory, setDeleteCategory] = useState<Category | null>(null);
+  const [deleteCategory, setDeleteCategory] = useState<CategoryWithCount | null>(null);
 
   const { data: categories, isLoading } = useCategories();
   const createMutation = useCreateCategory();
@@ -33,7 +33,7 @@ export function CategoryGrid() {
     setIsDialogOpen(true);
   };
 
-  const handleEdit = (category: Category) => {
+  const handleEdit = (category: CategoryWithCount) => {
     setEditingCategory(category);
     setIsDialogOpen(true);
   };
