@@ -27,7 +27,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         client:partners!cases_client_id_fkey(id, name),
         insurance:partners!cases_insurance_id_fkey(id, name),
         assigned_user:users!cases_assigned_to_fkey(id, full_name, avatar_url, role),
-        creator:users!cases_created_by_fkey(id, full_name)
+        creator:users!cases_created_by_fkey(id, full_name),
+        actions:case_actions(
+          id,
+          service_name,
+          service_description,
+          executor_id,
+          service_cost,
+          service_currency,
+          assistance_cost,
+          assistance_currency,
+          commission_cost,
+          commission_currency,
+          sort_order,
+          executor:partners(id, name)
+        )
       `)
       .eq('id', id)
       .is('deleted_at', null)
@@ -141,7 +155,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         *,
         client:partners!cases_client_id_fkey(id, name),
         insurance:partners!cases_insurance_id_fkey(id, name),
-        assigned_user:users!cases_assigned_to_fkey(id, full_name, avatar_url, role)
+        assigned_user:users!cases_assigned_to_fkey(id, full_name, avatar_url, role),
+        actions:case_actions(
+          id,
+          service_name,
+          service_description,
+          executor_id,
+          service_cost,
+          service_currency,
+          assistance_cost,
+          assistance_currency,
+          commission_cost,
+          commission_currency,
+          sort_order,
+          executor:partners(id, name)
+        )
       `)
       .single();
 

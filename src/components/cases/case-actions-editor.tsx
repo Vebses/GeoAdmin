@@ -101,7 +101,7 @@ export function CaseActionsEditor({ caseId, readOnly = false }: CaseActionsEdito
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-gray-700">მოქმედებები ({actions?.length || 0})</h3>
         {!readOnly && (
-          <Button size="sm" variant="outline" onClick={handleAddAction} disabled={!!newAction}>
+          <Button type="button" size="sm" variant="outline" onClick={handleAddAction} disabled={!!newAction}>
             <Plus className="h-4 w-4 mr-1" />
             დამატება
           </Button>
@@ -299,11 +299,11 @@ function ActionCard({
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2 border-t">
-          <Button size="sm" variant="ghost" onClick={onCancel}>
+          <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
             <X className="h-4 w-4 mr-1" />
             გაუქმება
           </Button>
-          <Button size="sm" onClick={() => onSave({ ...action, ...editData })}>
+          <Button type="button" size="sm" onClick={() => onSave({ ...action, ...editData })}>
             <Check className="h-4 w-4 mr-1" />
             შენახვა
           </Button>
@@ -331,6 +331,7 @@ function ActionCard({
         </div>
         {!readOnly && (
           <Button
+            type="button"
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
@@ -439,11 +440,11 @@ function NewActionCard({ action, partners, onChange, onSave, onCancel, isSaving 
 
       {/* Actions */}
       <div className="flex justify-end gap-2 pt-2 border-t">
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
           <X className="h-4 w-4 mr-1" />
           გაუქმება
         </Button>
-        <Button size="sm" onClick={onSave} disabled={isSaving || !action.service_name}>
+        <Button type="button" size="sm" onClick={onSave} disabled={isSaving || !action.service_name}>
           <Check className="h-4 w-4 mr-1" />
           {isSaving ? 'ინახება...' : 'დამატება'}
         </Button>
