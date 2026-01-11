@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 10,
-    fontFamily: 'FiraGO',
+    fontFamily: 'Helvetica',
     color: '#111827',
     backgroundColor: '#ffffff',
   },
