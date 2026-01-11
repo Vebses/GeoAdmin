@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { User } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,11 +49,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user profile from our users table
-    const { data: userProfile, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', data.user.id)
       .single();
+
+    const userProfile = profileData as User | null;
 
     if (profileError) {
       console.error('Error fetching user profile:', profileError);

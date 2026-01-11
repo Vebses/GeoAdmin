@@ -34,16 +34,18 @@ export function useAuth() {
       }
 
       // Fetch user profile
-      const { data: userProfile } = await supabase
+      const { data: profileData } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
         .single();
 
+      const userProfile = profileData as User | null;
+
       setState({
         user: userProfile,
         isLoading: false,
-        isAuthenticated: true,
+        isAuthenticated: !!userProfile,
       });
     } catch (error) {
       console.error('Error fetching user:', error);

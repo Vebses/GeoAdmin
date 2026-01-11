@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { User } from '@/types';
 
 export async function GET() {
   try {
@@ -15,13 +16,15 @@ export async function GET() {
     }
 
     // Get user profile from our users table
-    const { data: userProfile, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    if (profileError) {
+    const userProfile = profileData as User | null;
+
+    if (profileError || !userProfile) {
       console.error('Error fetching user profile:', profileError);
       return NextResponse.json(
         { error: 'მომხმარებელი ვერ მოიძებნა' },
