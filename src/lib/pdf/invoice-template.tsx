@@ -7,11 +7,9 @@ import {
   Image,
   StyleSheet,
 } from '@react-pdf/renderer';
-import { registerFonts } from './fonts';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, CurrencyCode } from '@/types';
 
-// Register fonts
-registerFonts();
+// Note: Fonts are registered in generate.ts before rendering
 
 // Translations
 const translations = {

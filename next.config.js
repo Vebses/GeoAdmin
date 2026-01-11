@@ -14,6 +14,19 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+    // Ensure React-PDF packages are handled correctly on the server
+    serverComponentsExternalPackages: ['@react-pdf/renderer'],
+  },
+  // Webpack configuration for React-PDF
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ensure React-PDF works correctly on the server
+      config.externals = config.externals || [];
+      config.externals.push({
+        canvas: 'commonjs canvas',
+      });
+    }
+    return config;
   },
 };
 

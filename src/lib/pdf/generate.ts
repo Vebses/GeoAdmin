@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { InvoicePDF } from './invoice-template';
+import { registerFonts } from './fonts';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface GeneratePDFOptions {
@@ -17,15 +18,20 @@ interface GeneratePDFOptions {
 export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<Buffer> {
   const { invoice, sender, recipient, caseData, language = 'en' } = options;
 
-  const pdfBuffer = await renderToBuffer(
-    <InvoicePDF
-      invoice={invoice}
-      sender={sender}
-      recipient={recipient}
-      caseData={caseData}
-      language={language}
-    />
-  );
+  // Ensure fonts are registered before rendering
+  registerFonts();
+
+  // Create the PDF element using createElement
+  const pdfElement = React.createElement(InvoicePDF, {
+    invoice,
+    sender,
+    recipient,
+    caseData,
+    language,
+  });
+
+  // Render to buffer
+  const pdfBuffer = await renderToBuffer(pdfElement);
 
   return Buffer.from(pdfBuffer);
 }
