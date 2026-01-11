@@ -13,3 +13,4 @@ export * from './empty-state';
 export * from './confirm-dialog';
 export * from './label';
 export * from './textarea';
+export * from './tabs';

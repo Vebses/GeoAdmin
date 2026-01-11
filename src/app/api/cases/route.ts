@@ -1,0 +1,181 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { caseSchema } from '@/lib/utils/validation';
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    
+    // Check auth
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
+        { status: 401 }
+      );
+    }
+
+    // Parse query params
+    const searchParams = request.nextUrl.searchParams;
+    const status = searchParams.get('status');
+    const assigned_to = searchParams.get('assigned_to');
+    const client_id = searchParams.get('client_id');
+    const insurance_id = searchParams.get('insurance_id');
+    const search = searchParams.get('search');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
+
+    // Build query
+    let query = supabase
+      .from('cases')
+      .select(`
+        *,
+        client:partners!cases_client_id_fkey(id, name),
+        insurance:partners!cases_insurance_id_fkey(id, name),
+        assigned_user:users!cases_assigned_to_fkey(id, full_name, avatar_url, role)
+      `, { count: 'exact' })
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    // Apply filters
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (assigned_to) {
+      query = query.eq('assigned_to', assigned_to);
+    }
+    if (client_id) {
+      query = query.eq('client_id', client_id);
+    }
+    if (insurance_id) {
+      query = query.eq('insurance_id', insurance_id);
+    }
+    if (search) {
+      query = query.or(`case_number.ilike.%${search}%,patient_name.ilike.%${search}%,patient_id.ilike.%${search}%`);
+    }
+
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      data: data || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    });
+  } catch (error) {
+    console.error('Cases GET error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient();
+    
+    // Check auth
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
+        { status: 401 }
+      );
+    }
+
+    // Parse and validate request body
+    const body = await request.json();
+    const validationResult = caseSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            code: 'VALIDATION_ERROR', 
+            message: 'ვალიდაციის შეცდომა',
+            details: validationResult.error.flatten().fieldErrors 
+          } 
+        },
+        { status: 400 }
+      );
+    }
+
+    const caseData = validationResult.data;
+
+    // Generate case number
+    const year = new Date().getFullYear();
+    const { data: lastCase } = await supabase
+      .from('cases')
+      .select('case_number')
+      .like('case_number', `GEO-${year}-%`)
+      .order('case_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    let nextNumber = 1;
+    if (lastCase && (lastCase as { case_number: string }).case_number) {
+      const parts = (lastCase as { case_number: string }).case_number.split('-');
+      nextNumber = parseInt(parts[2]) + 1;
+    }
+    const caseNumber = `GEO-${year}-${String(nextNumber).padStart(4, '0')}`;
+
+    // Build insert object
+    const insertData = {
+      case_number: caseNumber,
+      status: caseData.status,
+      priority: caseData.priority,
+      patient_name: caseData.patient_name,
+      patient_id: caseData.patient_id || null,
+      patient_dob: caseData.patient_dob?.toISOString().split('T')[0] || null,
+      patient_phone: caseData.patient_phone || null,
+      patient_email: caseData.patient_email || null,
+      client_id: caseData.client_id || null,
+      insurance_id: caseData.insurance_id || null,
+      insurance_policy_number: caseData.insurance_policy_number || null,
+      assigned_to: caseData.assigned_to || null,
+      is_medical: caseData.is_medical,
+      is_documented: caseData.is_documented,
+      complaints: caseData.complaints || null,
+      needs: caseData.needs || null,
+      diagnosis: caseData.diagnosis || null,
+      treatment_notes: caseData.treatment_notes || null,
+      opened_at: caseData.opened_at?.toISOString() || new Date().toISOString(),
+      created_by: user.id,
+    };
+
+    // Create case
+    const { data: newCase, error } = await supabase
+      .from('cases')
+      .insert(insertData as any)
+      .select(`
+        *,
+        client:partners!cases_client_id_fkey(id, name),
+        insurance:partners!cases_insurance_id_fkey(id, name),
+        assigned_user:users!cases_assigned_to_fkey(id, full_name, avatar_url, role)
+      `)
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      data: newCase,
+    }, { status: 201 });
+  } catch (error) {
+    console.error('Cases POST error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
+      { status: 500 }
+    );
+  }
+}
