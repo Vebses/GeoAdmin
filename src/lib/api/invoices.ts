@@ -140,3 +140,65 @@ export async function duplicateInvoice(id: string): Promise<InvoiceWithRelations
   
   return result.data!;
 }
+
+export interface SendInvoiceData {
+  email?: string;
+  cc_emails?: string[];
+  subject?: string;
+  body?: string;
+  regenerate_pdf?: boolean;
+}
+
+export interface SendInvoiceResult {
+  send_id: string;
+  message_id: string;
+  email: string;
+  sent_at: string;
+}
+
+export async function sendInvoice(id: string, data: SendInvoiceData = {}): Promise<SendInvoiceResult> {
+  const response = await fetch(`/api/invoices/${id}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  
+  const result: ApiResponse<SendInvoiceResult> = await response.json();
+  
+  if (!result.success) {
+    throw new Error(result.error?.message || 'ინვოისის გაგზავნა ვერ მოხერხდა');
+  }
+  
+  return result.data!;
+}
+
+export interface EmailPreviewData {
+  from: { email: string; name: string };
+  to: string;
+  cc: string[];
+  subject: string;
+  body: string;
+  attachments: Array<{ name: string; type: string }>;
+  invoice: {
+    id: string;
+    invoice_number: string;
+    language: string;
+    currency: string;
+    total: number;
+  };
+}
+
+export async function getEmailPreview(id: string): Promise<EmailPreviewData> {
+  const response = await fetch(`/api/invoices/${id}/preview`);
+  const result: ApiResponse<EmailPreviewData> = await response.json();
+  
+  if (!result.success) {
+    throw new Error(result.error?.message || 'ელ-ფოსტის პრევიუ ვერ ჩაიტვირთა');
+  }
+  
+  return result.data!;
+}
+
+export function getPDFUrl(id: string, download = false): string {
+  return `/api/invoices/${id}/pdf${download ? '?download=true' : ''}`;
+}

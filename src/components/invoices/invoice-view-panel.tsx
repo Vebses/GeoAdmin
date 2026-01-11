@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { 
   X, 
   Edit2, 
@@ -13,12 +14,15 @@ import {
   Calendar,
   DollarSign,
   Mail,
-  Clock
+  Clock,
+  Download,
+  Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { InvoiceStatusBadge } from './invoice-status-badge';
 import { InvoiceServicesEditor } from './invoice-services-editor';
+import { InvoiceSendHistory } from './invoice-send-history';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
 import type { InvoiceWithRelations, InvoiceServiceFormData } from '@/types';
@@ -32,6 +36,7 @@ interface InvoiceViewPanelProps {
   onDuplicate: (invoice: InvoiceWithRelations) => void;
   onMarkPaid: (invoice: InvoiceWithRelations) => void;
   onSend?: (invoice: InvoiceWithRelations) => void;
+  onPreviewPdf?: (invoice: InvoiceWithRelations) => void;
 }
 
 export function InvoiceViewPanel({
@@ -43,6 +48,7 @@ export function InvoiceViewPanel({
   onDuplicate,
   onMarkPaid,
   onSend,
+  onPreviewPdf,
 }: InvoiceViewPanelProps) {
   if (!isOpen || !invoice) return null;
 
@@ -54,6 +60,18 @@ export function InvoiceViewPanel({
   }));
 
   const languageLabel = invoice.language === 'ka' ? 'ქართული' : 'English';
+  
+  const handleDownloadPdf = () => {
+    window.open(`/api/invoices/${invoice.id}/pdf?download=true`, '_blank');
+  };
+
+  const handleViewPdf = () => {
+    if (onPreviewPdf) {
+      onPreviewPdf(invoice);
+    } else {
+      window.open(`/api/invoices/${invoice.id}/pdf`, '_blank');
+    }
+  };
 
   return (
     <>
@@ -130,6 +148,24 @@ export function InvoiceViewPanel({
                 გაგზავნა
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={handleViewPdf}
+            >
+              <Eye className="h-3.5 w-3.5 mr-1" />
+              PDF ნახვა
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={handleDownloadPdf}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              PDF ჩამოტვირთვა
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -262,32 +298,9 @@ export function InvoiceViewPanel({
           )}
 
           {/* Send History */}
-          {invoice.sends && invoice.sends.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                <Send className="h-3.5 w-3.5" />
-                გაგზავნის ისტორია ({invoice.sends.length})
-              </h3>
-              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
-                {invoice.sends.map((send) => (
-                  <div key={send.id} className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-gray-900">{send.email}</p>
-                      <p className="text-[10px] text-gray-500">{send.subject}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={send.status === 'sent' || send.status === 'delivered' ? 'success' : 'secondary'} className="text-[10px]">
-                        {send.status}
-                      </Badge>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
-                        {formatDate(send.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <InvoiceSendHistory 
+            sends={invoice.sends || []} 
+          />
 
           {/* Notes */}
           {invoice.notes && (

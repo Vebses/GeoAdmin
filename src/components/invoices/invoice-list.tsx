@@ -10,7 +10,9 @@ import {
   ChevronLeft, 
   ChevronRight,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Send,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +22,8 @@ import { InvoiceStatusBadge } from './invoice-status-badge';
 import { InvoiceViewPanel } from './invoice-view-panel';
 import { InvoiceEditPanel } from './invoice-edit-panel';
 import { InvoiceCreateWizard } from './invoice-create-wizard';
+import { InvoicePDFPreview } from './invoice-pdf-preview';
+import { InvoiceSendDialog } from './invoice-send-dialog';
 import { 
   useInvoices, 
   useCreateInvoice, 
@@ -44,6 +48,10 @@ export function InvoiceList() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteInvoice, setDeleteInvoice] = useState<InvoiceWithRelations | null>(null);
   const [markPaidInvoice, setMarkPaidInvoice] = useState<InvoiceWithRelations | null>(null);
+  
+  // Phase 8: PDF Preview & Send Dialog
+  const [pdfPreviewInvoice, setPdfPreviewInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [sendingInvoice, setSendingInvoice] = useState<InvoiceWithRelations | null>(null);
 
   // Filters
   const [filters, setFilters] = useState<InvoiceFiltersState>({
@@ -384,6 +392,8 @@ export function InvoiceList() {
         onDelete={setDeleteInvoice}
         onDuplicate={handleDuplicate}
         onMarkPaid={setMarkPaidInvoice}
+        onSend={setSendingInvoice}
+        onPreviewPdf={setPdfPreviewInvoice}
       />
 
       {/* Edit Panel */}
@@ -433,6 +443,29 @@ export function InvoiceList() {
         variant="default"
         loading={markPaidMutation.isPending}
       />
+
+      {/* PDF Preview */}
+      {pdfPreviewInvoice && (
+        <InvoicePDFPreview
+          invoiceId={pdfPreviewInvoice.id}
+          invoiceNumber={pdfPreviewInvoice.invoice_number}
+          isOpen={!!pdfPreviewInvoice}
+          onClose={() => setPdfPreviewInvoice(null)}
+        />
+      )}
+
+      {/* Send Dialog */}
+      {sendingInvoice && (
+        <InvoiceSendDialog
+          invoice={sendingInvoice}
+          isOpen={!!sendingInvoice}
+          onClose={() => setSendingInvoice(null)}
+          onSent={() => {
+            // Refetch invoices after send
+            setSendingInvoice(null);
+          }}
+        />
+      )}
     </div>
   );
 }

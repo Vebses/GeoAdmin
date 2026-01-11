@@ -8,7 +8,10 @@ import {
   deleteInvoice,
   markInvoicePaid,
   duplicateInvoice,
-  type MarkPaidData
+  sendInvoice,
+  getEmailPreview,
+  type MarkPaidData,
+  type SendInvoiceData
 } from '@/lib/api/invoices';
 import type { InvoiceFormData, InvoiceFilters } from '@/types';
 
@@ -126,5 +129,33 @@ export function useDuplicateInvoice() {
         description: error.message,
       });
     },
+  });
+}
+
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: SendInvoiceData }) => 
+      sendInvoice(id, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: INVOICES_QUERY_KEY });
+      toast.success('ინვოისი გაიგზავნა', {
+        description: `ინვოისი გაიგზავნა მისამართზე: ${result.email}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast.error('ინვოისის გაგზავნა ვერ მოხერხდა', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+export function useEmailPreview(invoiceId: string | null) {
+  return useQuery({
+    queryKey: [...INVOICES_QUERY_KEY, invoiceId, 'preview'],
+    queryFn: () => getEmailPreview(invoiceId!),
+    enabled: !!invoiceId,
   });
 }

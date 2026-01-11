@@ -46,6 +46,16 @@ export function formatDateTime(
 }
 
 /**
+ * Format time only
+ */
+export function formatTime(
+  date: string | Date | null | undefined,
+  locale: Locale = 'ka'
+): string {
+  return formatDate(date, 'HH:mm', locale);
+}
+
+/**
  * Format relative time (e.g., "2 hours ago")
  */
 export function formatRelativeTime(
