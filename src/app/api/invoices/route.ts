@@ -182,9 +182,7 @@ export async function POST(request: Request) {
       status: invoiceData.status || 'draft',
       currency: invoiceData.currency,
       subtotal,
-      franchise_amount: franchiseAmount,
-      franchise_type: invoiceData.franchise_type || 'fixed',
-      franchise_value: invoiceData.franchise_value || 0,
+      franchise: franchiseAmount, // Database column is 'franchise', not 'franchise_amount'
       total: Math.max(0, total),
       language: invoiceData.language,
       email_subject: invoiceData.email_subject || null,
@@ -213,12 +211,12 @@ export async function POST(request: Request) {
     if (invoiceData.services.length > 0) {
       const servicesInsertData = invoiceData.services.map((service: { description: string; quantity?: number; unit_price: number; total: number }, index: number) => ({
         invoice_id: invoiceId,
-        description: service.description,
+        name: service.description, // Database column is 'name', not 'description'
         quantity: service.quantity || 1,
         unit_price: service.unit_price,
-        total: service.total,
+        amount: service.total, // Database column is 'amount', not 'total'
+        is_auto: true,
         sort_order: index,
-      }));
       }));
 
       const { error: servicesError } = await supabase
