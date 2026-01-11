@@ -1,3 +1,4 @@
+import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { InvoicePDF } from './invoice-template';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
@@ -17,13 +18,13 @@ export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<B
   const { invoice, sender, recipient, caseData, language = 'en' } = options;
 
   const pdfBuffer = await renderToBuffer(
-    InvoicePDF({
-      invoice,
-      sender,
-      recipient,
-      caseData,
-      language,
-    })
+    <InvoicePDF
+      invoice={invoice}
+      sender={sender}
+      recipient={recipient}
+      caseData={caseData}
+      language={language}
+    />
   );
 
   return Buffer.from(pdfBuffer);
