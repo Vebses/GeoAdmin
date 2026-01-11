@@ -9,65 +9,59 @@ import {
 } from '@react-pdf/renderer';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, CurrencyCode } from '@/types';
 
-// Note: Fonts are registered in generate.ts before rendering
-
-// Translations
+// Translations - using English for Helvetica compatibility
 const translations = {
   en: {
     invoice: 'INVOICE',
     date: 'Date',
     case: 'Case',
-    from: 'From',
     to: 'Bill To',
     patient: 'Patient',
     patientId: 'Patient ID',
     idCode: 'ID Code',
-    service: 'Service Description',
+    service: 'Service',
     qty: 'Qty',
-    unitPrice: 'Unit Price',
+    unitPrice: 'Price',
     amount: 'Amount',
     subtotal: 'Subtotal',
-    franchise: 'Franchise (Deductible)',
+    franchise: 'Franchise',
     total: 'Total Due',
     bankDetails: 'Bank Details',
     bank: 'Bank',
-    swift: 'SWIFT/BIC',
+    swift: 'SWIFT',
     account: 'Account',
-    signature: 'Authorized Signature',
-    stamp: 'Company Seal',
-    footer: 'Thank you for your business',
+    signature: 'Signature',
+    stamp: 'Seal',
   },
   ka: {
-    invoice: 'ინვოისი',
-    date: 'თარიღი',
-    case: 'ქეისი',
-    from: 'გამომგზავნი',
-    to: 'ადრესატი',
-    patient: 'პაციენტი',
-    patientId: 'პირადი №',
-    idCode: 'საიდ. კოდი',
-    service: 'სერვისის აღწერა',
-    qty: 'რაოდ.',
-    unitPrice: 'ფასი',
-    amount: 'თანხა',
-    subtotal: 'ჯამი',
-    franchise: 'ფრანშიზა',
-    total: 'სულ გადასახდელი',
-    bankDetails: 'საბანკო რეკვიზიტები',
-    bank: 'ბანკი',
-    swift: 'SWIFT/BIC',
-    account: 'ანგარიში',
-    signature: 'ხელმოწერა',
-    stamp: 'ბეჭედი',
-    footer: 'გმადლობთ თანამშრომლობისთვის',
+    invoice: 'INVOICE',
+    date: 'Date',
+    case: 'Case',
+    to: 'Bill To',
+    patient: 'Patient',
+    patientId: 'Patient ID',
+    idCode: 'ID Code',
+    service: 'Service',
+    qty: 'Qty',
+    unitPrice: 'Price',
+    amount: 'Amount',
+    subtotal: 'Subtotal',
+    franchise: 'Franchise',
+    total: 'Total Due',
+    bankDetails: 'Bank Details',
+    bank: 'Bank',
+    swift: 'SWIFT',
+    account: 'Account',
+    signature: 'Signature',
+    stamp: 'Seal',
   },
 };
 
 // Currency formatting
 const currencySymbols: Record<CurrencyCode, string> = {
-  GEL: '₾',
-  EUR: '€',
-  USD: '$',
+  GEL: 'GEL',
+  EUR: 'EUR',
+  USD: 'USD',
 };
 
 function formatCurrency(amount: number, currency: CurrencyCode): string {
@@ -75,15 +69,8 @@ function formatCurrency(amount: number, currency: CurrencyCode): string {
   return `${amount.toFixed(2)} ${symbol}`;
 }
 
-function formatDate(dateStr: string, language: 'en' | 'ka'): string {
+function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  if (language === 'ka') {
-    return date.toLocaleDateString('ka-GE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: '2-digit',
@@ -91,170 +78,149 @@ function formatDate(dateStr: string, language: 'en' | 'ka'): string {
   });
 }
 
-// Styles
+// Compact styles for single page
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
-    fontSize: 10,
+    padding: 30,
+    fontSize: 9,
     fontFamily: 'Helvetica',
     color: '#111827',
     backgroundColor: '#ffffff',
   },
-  // Header accent
-  headerAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 6,
-    backgroundColor: '#3b82f6',
-  },
-  // Header section
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 30,
-    marginTop: 10,
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: '#3b82f6',
   },
   companyInfo: {
-    maxWidth: 220,
+    maxWidth: 200,
   },
   logo: {
-    width: 100,
-    height: 40,
+    width: 80,
+    height: 35,
     objectFit: 'contain',
-    marginBottom: 8,
+    marginBottom: 5,
   },
   logoPlaceholder: {
-    width: 100,
-    height: 40,
+    width: 80,
+    height: 30,
     backgroundColor: '#3b82f6',
-    borderRadius: 6,
-    marginBottom: 8,
+    borderRadius: 4,
+    marginBottom: 5,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logoText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 700,
   },
   companyName: {
-    fontSize: 12,
-    fontWeight: 600,
-    marginBottom: 4,
-    color: '#111827',
-  },
-  companyDetail: {
-    fontSize: 9,
-    color: '#6b7280',
+    fontSize: 10,
+    fontWeight: 700,
     marginBottom: 2,
   },
-  // Invoice info (right side)
+  companyDetail: {
+    fontSize: 8,
+    color: '#6b7280',
+    marginBottom: 1,
+  },
+  // Invoice info
   invoiceInfo: {
     textAlign: 'right',
   },
   invoiceTitle: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 700,
-    color: '#111827',
-    marginBottom: 4,
-  },
-  invoiceNumber: {
-    fontSize: 14,
-    fontWeight: 600,
     color: '#3b82f6',
-    marginBottom: 8,
-  },
-  invoiceMeta: {
-    fontSize: 9,
-    color: '#6b7280',
     marginBottom: 2,
   },
-  invoiceMetaLabel: {
-    color: '#9ca3af',
+  invoiceNumber: {
+    fontSize: 11,
+    fontWeight: 600,
+    marginBottom: 5,
+  },
+  invoiceMeta: {
+    fontSize: 8,
+    color: '#6b7280',
+    marginBottom: 1,
   },
   // Parties section
   partiesSection: {
     flexDirection: 'row',
-    marginBottom: 24,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    marginBottom: 15,
   },
   partyBox: {
     flex: 1,
-    paddingRight: 20,
+    paddingRight: 15,
   },
   partyLabel: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 700,
     color: '#9ca3af',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   partyName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 600,
-    color: '#111827',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   partyDetail: {
-    fontSize: 9,
+    fontSize: 8,
     color: '#6b7280',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   // Services table
   table: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   tableHeader: {
     flexDirection: 'row',
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    paddingBottom: 8,
-    marginBottom: 4,
+    paddingBottom: 4,
+    marginBottom: 2,
   },
   tableHeaderCell: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 700,
     color: '#9ca3af',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
-    paddingVertical: 8,
-    alignItems: 'center',
+    paddingVertical: 4,
   },
   tableFranchiseRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#fecaca',
-    paddingVertical: 8,
-    alignItems: 'center',
+    paddingVertical: 4,
     backgroundColor: '#fef2f2',
   },
   tableCell: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#374151',
   },
   tableCellBold: {
-    fontSize: 10,
-    fontWeight: 500,
-    color: '#111827',
+    fontSize: 8,
+    fontWeight: 600,
   },
   tableCellRed: {
-    fontSize: 10,
-    fontWeight: 500,
+    fontSize: 8,
+    fontWeight: 600,
     color: '#dc2626',
   },
   // Column widths
-  colNum: { width: '8%' },
-  colService: { width: '52%' },
+  colNum: { width: '6%' },
+  colService: { width: '54%' },
   colQty: { width: '10%', textAlign: 'center' },
   colPrice: { width: '15%', textAlign: 'right' },
   colAmount: { width: '15%', textAlign: 'right' },
@@ -262,148 +228,139 @@ const styles = StyleSheet.create({
   totalsContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: 16,
+    marginBottom: 10,
   },
   totalsBox: {
-    width: 200,
+    width: 160,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 3,
   },
   totalRowFinal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginTop: 8,
+    paddingVertical: 5,
+    marginTop: 4,
     borderTopWidth: 2,
     borderTopColor: '#111827',
   },
   totalLabel: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#6b7280',
   },
   totalValue: {
-    fontSize: 10,
-    color: '#111827',
+    fontSize: 8,
+    fontWeight: 600,
+  },
+  totalRedValue: {
+    fontSize: 8,
+    fontWeight: 600,
+    color: '#dc2626',
   },
   totalLabelFinal: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 700,
-    color: '#111827',
   },
   totalValueFinal: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: 700,
     color: '#3b82f6',
   },
-  totalRedValue: {
-    fontSize: 10,
-    color: '#dc2626',
-  },
-  // Bank details
+  // Bank Details
   bankSection: {
+    marginBottom: 10,
+    padding: 8,
     backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 16,
-    marginTop: 24,
-    marginBottom: 24,
+    borderRadius: 4,
   },
   bankTitle: {
     fontSize: 8,
     fontWeight: 700,
-    color: '#9ca3af',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 10,
+    color: '#374151',
+    marginBottom: 4,
   },
   bankGrid: {
     flexDirection: 'row',
-    gap: 20,
   },
   bankItem: {
     flex: 1,
+    marginRight: 10,
   },
   bankLabel: {
-    fontSize: 8,
+    fontSize: 7,
     color: '#9ca3af',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   bankValue: {
-    fontSize: 10,
-    fontWeight: 500,
-    color: '#111827',
+    fontSize: 8,
+    fontWeight: 600,
   },
-  // Signatures
+  // Signatures - compact
   signaturesSection: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
-    gap: 24,
-    marginTop: 20,
-    paddingTop: 16,
+    gap: 15,
+    marginTop: 5,
   },
   signatureBox: {
     alignItems: 'center',
   },
   signatureLine: {
-    width: 120,
-    height: 50,
-    borderBottomWidth: 2,
+    width: 80,
+    height: 30,
+    borderBottomWidth: 1,
     borderBottomColor: '#d1d5db',
-    marginBottom: 6,
+    marginBottom: 3,
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
   signatureImage: {
-    width: 100,
-    height: 40,
+    width: 70,
+    height: 25,
     objectFit: 'contain',
   },
   signatureLabel: {
-    fontSize: 8,
+    fontSize: 7,
     color: '#9ca3af',
   },
   stampBox: {
     alignItems: 'center',
   },
   stampPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: '#93c5fd',
-    backgroundColor: '#eff6ff',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stampImage: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
     objectFit: 'contain',
   },
   stampText: {
-    fontSize: 7,
-    color: '#93c5fd',
-    textAlign: 'center',
+    fontSize: 6,
+    color: '#9ca3af',
   },
   // Footer
   footer: {
-    marginTop: 'auto',
-    paddingTop: 16,
+    position: 'absolute',
+    bottom: 20,
+    left: 30,
+    right: 30,
+    textAlign: 'center',
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
-    textAlign: 'center',
   },
   footerText: {
-    fontSize: 9,
-    color: '#9ca3af',
-  },
-  footerCompany: {
     fontSize: 8,
     color: '#9ca3af',
-    marginTop: 4,
   },
 });
 
@@ -422,7 +379,7 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
   // Parse services
   const services = invoice.services || [];
   
-  // Calculate totals - use 'amount' field from services, 'franchise' from invoice
+  // Calculate totals
   const subtotal = services.reduce((sum, s) => sum + ((s as any).amount || s.total || 0), 0);
   const franchiseAmount = (invoice as any).franchise || 0;
   const total = subtotal - franchiseAmount;
@@ -440,9 +397,6 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header accent bar */}
-        <View style={styles.headerAccent} fixed />
-        
         {/* Header */}
         <View style={styles.header}>
           {/* Company Info */}
@@ -466,14 +420,8 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
           <View style={styles.invoiceInfo}>
             <Text style={styles.invoiceTitle}>{t.invoice}</Text>
             <Text style={styles.invoiceNumber}>#{invoice.invoice_number}</Text>
-            <Text style={styles.invoiceMeta}>
-              <Text style={styles.invoiceMetaLabel}>{t.date}: </Text>
-              {formatDate(invoice.created_at, language)}
-            </Text>
-            <Text style={styles.invoiceMeta}>
-              <Text style={styles.invoiceMetaLabel}>{t.case}: </Text>
-              {caseData.case_number}
-            </Text>
+            <Text style={styles.invoiceMeta}>{t.date}: {formatDate(invoice.created_at)}</Text>
+            <Text style={styles.invoiceMeta}>{t.case}: {caseData.case_number}</Text>
           </View>
         </View>
         
@@ -538,7 +486,7 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
             </View>
           ))}
           
-          {/* Franchise Row (if applicable) */}
+          {/* Franchise Row */}
           {franchiseAmount > 0 && (
             <View style={styles.tableFranchiseRow}>
               <Text style={[styles.tableCell, styles.colNum]}></Text>
@@ -578,15 +526,15 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
           <View style={styles.bankGrid}>
             <View style={styles.bankItem}>
               <Text style={styles.bankLabel}>{t.bank}</Text>
-              <Text style={styles.bankValue}>{sender.bank_name}</Text>
+              <Text style={styles.bankValue}>{sender.bank_name || '-'}</Text>
             </View>
             <View style={styles.bankItem}>
               <Text style={styles.bankLabel}>{t.swift}</Text>
-              <Text style={styles.bankValue}>{sender.bank_code}</Text>
+              <Text style={styles.bankValue}>{sender.bank_code || '-'}</Text>
             </View>
             <View style={[styles.bankItem, { flex: 2 }]}>
               <Text style={styles.bankLabel}>{t.account} ({currency})</Text>
-              <Text style={styles.bankValue}>{getBankAccount()}</Text>
+              <Text style={styles.bankValue}>{getBankAccount() || '-'}</Text>
             </View>
           </View>
         </View>
@@ -615,8 +563,7 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
         
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>{t.footer}</Text>
-          <Text style={styles.footerCompany}>
+          <Text style={styles.footerText}>
             {sender.name} • {sender.email} • {sender.phone}
           </Text>
         </View>
