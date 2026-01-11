@@ -254,14 +254,14 @@ function ActionCard({
           <div className="space-y-1">
             <label className="text-xs text-gray-500">შემსრულებელი</label>
             <Select
-              value={editData.executor_id ?? action.executor_id ?? ''}
-              onValueChange={(val) => setEditData({ ...editData, executor_id: val || null })}
+              value={editData.executor_id ?? action.executor_id ?? '__none__'}
+              onValueChange={(val) => setEditData({ ...editData, executor_id: val === '__none__' ? null : val })}
             >
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="აირჩიეთ" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="" className="text-xs">-- არ არის --</SelectItem>
+                <SelectItem value="__none__" className="text-xs">-- არ არის --</SelectItem>
                 {partners.map((p) => (
                   <SelectItem key={p.id} value={p.id} className="text-xs">
                     {p.name}
@@ -394,14 +394,14 @@ function NewActionCard({ action, partners, onChange, onSave, onCancel, isSaving 
         <div className="space-y-1">
           <label className="text-xs text-gray-500">შემსრულებელი</label>
           <Select
-            value={action.executor_id || ''}
-            onValueChange={(val) => onChange({ ...action, executor_id: val || null })}
+            value={action.executor_id || '__none__'}
+            onValueChange={(val) => onChange({ ...action, executor_id: val === '__none__' ? null : val })}
           >
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="აირჩიეთ" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="" className="text-xs">-- არ არის --</SelectItem>
+              <SelectItem value="__none__" className="text-xs">-- არ არის --</SelectItem>
               {partners.map((p) => (
                 <SelectItem key={p.id} value={p.id} className="text-xs">
                   {p.name}

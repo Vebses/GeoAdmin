@@ -213,9 +213,16 @@ export function CaseEditPanel({
               </div>
               <div className="space-y-1.5">
                 <Label>გახსნის თარიღი</Label>
-                <Input
-                  type="date"
-                  {...register('opened_at', { valueAsDate: true })}
+                <Controller
+                  name="opened_at"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      type="date"
+                      value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value || ''}
+                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                    />
+                  )}
                 />
               </div>
             </div>
@@ -227,11 +234,12 @@ export function CaseEditPanel({
                   name="client_id"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="აირჩიეთ დამკვეთი..." />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
                         {clientPartners.map((partner) => (
                           <SelectItem key={partner.id} value={partner.id}>
                             {partner.name}
@@ -248,11 +256,12 @@ export function CaseEditPanel({
                   name="assigned_to"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="აირჩიეთ ასისტანტი..." />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
                         {assistants.map((user) => (
                           <SelectItem key={user.id} value={user.id}>
                             {user.full_name}
@@ -272,11 +281,12 @@ export function CaseEditPanel({
                   name="insurance_id"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || ''} onValueChange={(val) => field.onChange(val || undefined)}>
+                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="აირჩიეთ სადაზღვევო..." />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
                         {insurancePartners.map((partner) => (
                           <SelectItem key={partner.id} value={partner.id}>
                             {partner.name}
@@ -332,9 +342,16 @@ export function CaseEditPanel({
               </div>
               <div className="space-y-1.5">
                 <Label>დაბადების თარიღი</Label>
-                <Input
-                  type="date"
-                  {...register('patient_dob', { valueAsDate: true })}
+                <Controller
+                  name="patient_dob"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      type="date"
+                      value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value || ''}
+                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                    />
+                  )}
                 />
               </div>
             </div>
