@@ -1,0 +1,74 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { 
+  getPartners, 
+  getPartner,
+  createPartner, 
+  updatePartner, 
+  deletePartner,
+  type GetPartnersParams,
+} from '@/lib/api/partners';
+import type { PartnerFormData } from '@/types';
+
+export const PARTNERS_QUERY_KEY = ['partners'];
+
+export function usePartners(params: GetPartnersParams = {}) {
+  return useQuery({
+    queryKey: [PARTNERS_QUERY_KEY, params],
+    queryFn: () => getPartners(params),
+  });
+}
+
+export function usePartner(id: string | null) {
+  return useQuery({
+    queryKey: [PARTNERS_QUERY_KEY, id],
+    queryFn: () => getPartner(id!),
+    enabled: !!id,
+  });
+}
+
+export function useCreatePartner() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (data: PartnerFormData) => createPartner(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PARTNERS_QUERY_KEY });
+      toast.success('პარტნიორი შეიქმნა');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useUpdatePartner() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: PartnerFormData }) => 
+      updatePartner(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PARTNERS_QUERY_KEY });
+      toast.success('პარტნიორი განახლდა');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useDeletePartner() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (id: string) => deletePartner(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PARTNERS_QUERY_KEY });
+      toast.success('პარტნიორი წაიშალა');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}

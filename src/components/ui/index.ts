@@ -8,3 +8,8 @@ export * from './dialog';
 export * from './select';
 export * from './scroll-area';
 export * from './avatar';
+export * from './slide-panel';
+export * from './empty-state';
+export * from './confirm-dialog';
+export * from './label';
+export * from './textarea';
