@@ -94,8 +94,8 @@ function prepareVariables(
   const language = invoice.language as InvoiceLanguage;
   
   const services = invoice.services || [];
-  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0);
-  const franchise = invoice.franchise_amount || 0;
+  const subtotal = services.reduce((sum, s) => sum + ((s as any).amount || s.total || 0), 0);
+  const franchise = (invoice as any).franchise || 0;
   const total = subtotal - franchise;
 
   return {
@@ -172,8 +172,8 @@ export async function sendInvoiceEmail({
       throw new Error('No recipient email address');
     }
     
-    // Prepare from address
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@geoadmin.ge';
+    // Prepare from address - use verified domain
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@geoadmin.ge';
     const fromName = process.env.RESEND_FROM_NAME || sender.name;
     
     // Prepare attachments

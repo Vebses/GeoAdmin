@@ -9,7 +9,7 @@ import {
 } from '@react-pdf/renderer';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, CurrencyCode } from '@/types';
 
-// Translations - using English for Helvetica compatibility
+// Translations - Georgian and English
 const translations = {
   en: {
     invoice: 'INVOICE',
@@ -34,34 +34,34 @@ const translations = {
     stamp: 'Seal',
   },
   ka: {
-    invoice: 'INVOICE',
-    date: 'Date',
-    case: 'Case',
-    to: 'Bill To',
-    patient: 'Patient',
-    patientId: 'Patient ID',
-    idCode: 'ID Code',
-    service: 'Service',
-    qty: 'Qty',
-    unitPrice: 'Price',
-    amount: 'Amount',
-    subtotal: 'Subtotal',
-    franchise: 'Franchise',
-    total: 'Total Due',
-    bankDetails: 'Bank Details',
-    bank: 'Bank',
+    invoice: 'ინვოისი',
+    date: 'თარიღი',
+    case: 'ქეისი',
+    to: 'მიმღები',
+    patient: 'პაციენტი',
+    patientId: 'პაციენტის ID',
+    idCode: 'საიდ. კოდი',
+    service: 'მომსახურება',
+    qty: 'რაოდ.',
+    unitPrice: 'ფასი',
+    amount: 'თანხა',
+    subtotal: 'ქვეჯამი',
+    franchise: 'ფრანშიზა',
+    total: 'გადასახდელი',
+    bankDetails: 'საბანკო რეკვიზიტები',
+    bank: 'ბანკი',
     swift: 'SWIFT',
-    account: 'Account',
-    signature: 'Signature',
-    stamp: 'Seal',
+    account: 'ანგარიში',
+    signature: 'ხელმოწერა',
+    stamp: 'ბეჭედი',
   },
 };
 
 // Currency formatting
 const currencySymbols: Record<CurrencyCode, string> = {
-  GEL: 'GEL',
-  EUR: 'EUR',
-  USD: 'USD',
+  GEL: '₾',
+  EUR: '€',
+  USD: '$',
 };
 
 function formatCurrency(amount: number, currency: CurrencyCode): string {
@@ -78,12 +78,12 @@ function formatDate(dateStr: string): string {
   });
 }
 
-// Compact styles for single page
+// Compact styles for single page with FiraGO
 const styles = StyleSheet.create({
   page: {
     padding: 30,
     fontSize: 9,
-    fontFamily: 'Helvetica',
+    fontFamily: 'FiraGO',
     color: '#111827',
     backgroundColor: '#ffffff',
   },
@@ -370,9 +370,21 @@ export interface InvoicePDFProps {
   recipient: Partner;
   caseData: CaseWithRelations;
   language: 'en' | 'ka';
+  logoBase64?: string;
+  signatureBase64?: string;
+  stampBase64?: string;
 }
 
-export function InvoicePDF({ invoice, sender, recipient, caseData, language }: InvoicePDFProps) {
+export function InvoicePDF({ 
+  invoice, 
+  sender, 
+  recipient, 
+  caseData, 
+  language,
+  logoBase64,
+  signatureBase64,
+  stampBase64,
+}: InvoicePDFProps) {
   const t = translations[language];
   const currency = invoice.currency as CurrencyCode;
   
@@ -394,6 +406,11 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
     }
   };
 
+  // Determine logo source - prefer base64 if available
+  const logoSrc = logoBase64 || sender.logo_url;
+  const signatureSrc = signatureBase64 || sender.signature_url;
+  const stampSrc = stampBase64 || sender.stamp_url;
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -401,8 +418,8 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
         <View style={styles.header}>
           {/* Company Info */}
           <View style={styles.companyInfo}>
-            {sender.logo_url ? (
-              <Image src={sender.logo_url} style={styles.logo} />
+            {logoSrc ? (
+              <Image src={logoSrc} style={styles.logo} />
             ) : (
               <View style={styles.logoPlaceholder}>
                 <Text style={styles.logoText}>{sender.name?.substring(0, 3).toUpperCase() || 'GEO'}</Text>
@@ -543,16 +560,16 @@ export function InvoicePDF({ invoice, sender, recipient, caseData, language }: I
         <View style={styles.signaturesSection}>
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine}>
-              {sender.signature_url && (
-                <Image src={sender.signature_url} style={styles.signatureImage} />
+              {signatureSrc && (
+                <Image src={signatureSrc} style={styles.signatureImage} />
               )}
             </View>
             <Text style={styles.signatureLabel}>{t.signature}</Text>
           </View>
           
           <View style={styles.stampBox}>
-            {sender.stamp_url ? (
-              <Image src={sender.stamp_url} style={styles.stampImage} />
+            {stampSrc ? (
+              <Image src={stampSrc} style={styles.stampImage} />
             ) : (
               <View style={styles.stampPlaceholder}>
                 <Text style={styles.stampText}>{t.stamp}</Text>

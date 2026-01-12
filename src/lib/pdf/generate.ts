@@ -13,6 +13,33 @@ interface GeneratePDFOptions {
 }
 
 /**
+ * Fetch image and convert to base64 data URI
+ */
+async function fetchImageAsBase64(url: string | null | undefined): Promise<string | undefined> {
+  if (!url) return undefined;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Failed to fetch image: ${url}`);
+      return undefined;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    
+    // Determine mime type
+    const contentType = response.headers.get('content-type') || 'image/png';
+    
+    return `data:${contentType};base64,${base64}`;
+  } catch (error) {
+    console.warn(`Error fetching image ${url}:`, error);
+    return undefined;
+  }
+}
+
+/**
  * Generate PDF buffer from invoice data
  */
 export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<Buffer> {
@@ -21,6 +48,13 @@ export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<B
   // Ensure fonts are registered before rendering
   registerFonts();
 
+  // Fetch company images as base64
+  const [logoBase64, signatureBase64, stampBase64] = await Promise.all([
+    fetchImageAsBase64(sender.logo_url),
+    fetchImageAsBase64(sender.signature_url),
+    fetchImageAsBase64(sender.stamp_url),
+  ]);
+
   // Create the PDF element using createElement
   const pdfElement = React.createElement(InvoicePDF, {
     invoice,
@@ -28,6 +62,9 @@ export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<B
     recipient,
     caseData,
     language,
+    logoBase64,
+    signatureBase64,
+    stampBase64,
   });
 
   // Render to buffer
