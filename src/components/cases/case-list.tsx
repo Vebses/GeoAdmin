@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Eye, Edit2, Trash2, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Eye, Edit2, Trash2, Briefcase, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ConfirmDialog } from '@/components/ui';
@@ -18,19 +18,29 @@ import {
 } from '@/hooks/use-cases';
 import { usePartners } from '@/hooks/use-partners';
 import { useUsers } from '@/hooks/use-users';
+import { useAuth } from '@/hooks/use-auth';
 import { useRealtimeCases } from '@/hooks/use-realtime';
 import { formatDate } from '@/lib/utils/format';
 import { useDebounce } from '@/hooks/use-debounce';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import type { CaseWithRelations, CaseFormData, CaseStatus } from '@/types';
 
 const ITEMS_PER_PAGE = 10;
 
 export function CaseList() {
+  const { user: currentUser } = useAuth();
+  const isManager = currentUser?.role === 'manager';
+  const isAssistant = currentUser?.role === 'assistant';
+
   // Panel states
   const [viewingCase, setViewingCase] = useState<CaseWithRelations | null>(null);
   const [editingCase, setEditingCase] = useState<CaseWithRelations | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteCase, setDeleteCase] = useState<CaseWithRelations | null>(null);
+
+  // View mode for assistants: 'my' (default) or 'all'
+  const [viewMode, setViewMode] = useState<'my' | 'all'>(isAssistant ? 'my' : 'all');
 
   // Filters
   const [filters, setFilters] = useState<CaseFiltersState>({
@@ -44,7 +54,7 @@ export function CaseList() {
   // Pagination
   const [page, setPage] = useState(1);
 
-  // Data fetching
+  // Data fetching - include my_cases filter for assistants
   const { data: casesData, isLoading: casesLoading } = useCases({
     status: filters.status || undefined,
     assigned_to: filters.assigned_to || undefined,
@@ -52,6 +62,7 @@ export function CaseList() {
     search: debouncedSearch || undefined,
     page,
     limit: ITEMS_PER_PAGE,
+    my_cases: isAssistant && viewMode === 'my' ? true : undefined,
   });
   const { data: partnersData } = usePartners({});
   const { data: users = [] } = useUsers();
@@ -67,7 +78,6 @@ export function CaseList() {
 
   // Compute status counts
   const statusCounts = useMemo(() => {
-    // For now, return mock counts - in real app, this would come from API
     return {
       all: casesData?.total || 0,
       draft: 0,
@@ -78,6 +88,18 @@ export function CaseList() {
       cancelled: 0,
     } as Record<CaseStatus | 'all', number>;
   }, [casesData]);
+
+  // Permission helpers
+  const canEditCase = (caseItem: CaseWithRelations | null): boolean => {
+    if (!caseItem) return false;
+    if (isManager) return true;
+    if (isAssistant && caseItem.assigned_to === currentUser?.id) return true;
+    return false;
+  };
+
+  const canDeleteCase = (): boolean => {
+    return isManager;
+  };
 
   // Handlers
   const handleCreate = () => {
@@ -90,6 +112,10 @@ export function CaseList() {
   };
 
   const handleEdit = (caseItem: CaseWithRelations) => {
+    if (!canEditCase(caseItem)) {
+      toast.error('თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება');
+      return;
+    }
     setViewingCase(null);
     setEditingCase(caseItem);
     setIsCreateOpen(true);
@@ -115,7 +141,12 @@ export function CaseList() {
 
   const handleFiltersChange = (newFilters: CaseFiltersState) => {
     setFilters(newFilters);
-    setPage(1); // Reset to first page on filter change
+    setPage(1);
+  };
+
+  const handleViewModeChange = (mode: 'my' | 'all') => {
+    setViewMode(mode);
+    setPage(1);
   };
 
   const cases = casesData?.data || [];
@@ -163,6 +194,35 @@ export function CaseList() {
         </div>
       </div>
 
+      {/* My Cases / All Cases Toggle for Assistants */}
+      {isAssistant && (
+        <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+          <button
+            onClick={() => handleViewModeChange('my')}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5',
+              viewMode === 'my'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <User size={12} />
+            ჩემი ქეისები
+          </button>
+          <button
+            onClick={() => handleViewModeChange('all')}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+              viewMode === 'all'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            ყველა ქეისი
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <CaseFilters
         filters={filters}
@@ -177,7 +237,7 @@ export function CaseList() {
         <div className="bg-white rounded-xl border border-gray-100">
           <EmptyState
             icon={Briefcase}
-            title="ქეისები არ მოიძებნა"
+            title={viewMode === 'my' ? 'თქვენ არ გაქვთ მინიჭებული ქეისები' : 'ქეისები არ მოიძებნა'}
             description={filters.search || filters.status ? 'სცადეთ სხვა ფილტრები' : 'შექმენით პირველი ქეისი'}
             action={
               !filters.search && !filters.status && (
@@ -219,86 +279,98 @@ export function CaseList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {cases.map((caseItem) => (
-                  <tr
-                    key={caseItem.id}
-                    className="hover:bg-gray-50/50 transition-colors cursor-pointer"
-                    onClick={() => handleView(caseItem)}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-medium text-blue-600">
-                        {caseItem.case_number}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="text-xs font-medium text-gray-900">
-                          {caseItem.patient_name}
-                        </p>
-                        {caseItem.patient_id && (
-                          <p className="text-[10px] text-gray-400">
-                            {caseItem.patient_id}
+                {cases.map((caseItem) => {
+                  const canEdit = canEditCase(caseItem);
+                  const canDelete = canDeleteCase();
+                  
+                  return (
+                    <tr
+                      key={caseItem.id}
+                      className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                      onClick={() => handleView(caseItem)}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-medium text-blue-600">
+                          {caseItem.case_number}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-xs font-medium text-gray-900">
+                            {caseItem.patient_name}
                           </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-gray-700">
-                        {caseItem.client?.name || '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <CaseStatusBadge status={caseItem.status} size="xs" />
-                    </td>
-                    <td className="px-4 py-3">
-                      {caseItem.assigned_user ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-medium text-blue-600">
-                            {caseItem.assigned_user.full_name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <span className="text-xs text-gray-700">
-                            {caseItem.assigned_user.full_name}
-                          </span>
+                          {caseItem.patient_id && (
+                            <p className="text-[10px] text-gray-400">
+                              {caseItem.patient_id}
+                            </p>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-gray-600">
-                        {formatDate(caseItem.opened_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => handleView(caseItem)}
-                        >
-                          <Eye size={14} className="text-gray-400" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => handleEdit(caseItem)}
-                        >
-                          <Edit2 size={14} className="text-blue-500" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setDeleteCase(caseItem)}
-                        >
-                          <Trash2 size={14} className="text-red-400" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-700">
+                          {caseItem.client?.name || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <CaseStatusBadge status={caseItem.status} size="xs" />
+                      </td>
+                      <td className="px-4 py-3">
+                        {caseItem.assigned_user ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-medium text-blue-600">
+                              {caseItem.assigned_user.full_name?.split(' ').map(n => n[0]).join('') || '?'}
+                            </div>
+                            <span className="text-xs text-gray-700">
+                              {caseItem.assigned_user.full_name}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-600">
+                          {formatDate(caseItem.opened_at)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleView(caseItem)}
+                            title="ნახვა"
+                          >
+                            <Eye size={14} className="text-gray-400" />
+                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleEdit(caseItem)}
+                              title="რედაქტირება"
+                            >
+                              <Edit2 size={14} className="text-blue-500" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => setDeleteCase(caseItem)}
+                              title="წაშლა"
+                            >
+                              <Trash2 size={14} className="text-red-400" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -351,8 +423,8 @@ export function CaseList() {
         caseData={viewingCase}
         isOpen={!!viewingCase}
         onClose={() => setViewingCase(null)}
-        onEdit={handleEdit}
-        onDelete={setDeleteCase}
+        onEdit={canEditCase(viewingCase) ? handleEdit : undefined}
+        onDelete={canDeleteCase() ? setDeleteCase : undefined}
       />
 
       {/* Edit Panel */}
@@ -367,6 +439,7 @@ export function CaseList() {
         loading={createMutation.isPending || updateMutation.isPending}
         partners={partners}
         users={users}
+        currentUser={currentUser}
       />
 
       {/* Delete Confirmation */}

@@ -28,8 +28,8 @@ interface CaseViewPanelProps {
   caseData: CaseWithRelations | null;
   isOpen: boolean;
   onClose: () => void;
-  onEdit: (caseData: CaseWithRelations) => void;
-  onDelete: (caseData: CaseWithRelations) => void;
+  onEdit?: (caseData: CaseWithRelations) => void;
+  onDelete?: (caseData: CaseWithRelations) => void;
 }
 
 export function CaseViewPanel({ 
@@ -242,25 +242,31 @@ export function CaseViewPanel({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="flex-1"
-            onClick={() => onEdit(caseData)}
-          >
-            <Edit2 size={14} className="mr-1" />
-            რედაქტირება
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-500 hover:text-red-600 hover:bg-red-50"
-            onClick={() => onDelete(caseData)}
-          >
-            <Trash2 size={14} />
-          </Button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
+            {onEdit && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => onEdit(caseData)}
+              >
+                <Edit2 size={14} className="mr-1" />
+                რედაქტირება
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                onClick={() => onDelete(caseData)}
+              >
+                <Trash2 size={14} />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </SlidePanel>
   );

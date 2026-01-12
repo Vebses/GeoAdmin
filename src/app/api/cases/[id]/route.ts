@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
+import { notifyCaseReassigned, notifyCaseStatusChanged } from '@/lib/notifications';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -84,10 +85,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if case exists
+    // Get current user's profile
+    const { data: currentUserProfile } = await supabase
+      .from('users')
+      .select('id, role, full_name')
+      .eq('id', user.id)
+      .single();
+
+    const userRole = (currentUserProfile as any)?.role || 'assistant';
+
+    // Check if case exists and get current data
     const { data: existingCase, error: findError } = await supabase
       .from('cases')
-      .select('id')
+      .select('id, case_number, assigned_to, status')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -97,6 +107,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
         { status: 404 }
       );
+    }
+
+    const existingCaseData = existingCase as { id: string; case_number: string; assigned_to: string | null; status: string };
+
+    // PERMISSION CHECK: Assistants can only edit their own cases
+    if (userRole === 'assistant') {
+      if (existingCaseData.assigned_to !== user.id) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება' } },
+          { status: 403 }
+        );
+      }
     }
 
     // Parse and validate request body
@@ -119,6 +141,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const caseData = validationResult.data;
 
+    // IMPORTANT: For assistants, don't allow changing assigned_to
+    let newAssignedTo = caseData.assigned_to;
+    if (userRole === 'assistant') {
+      // Assistants cannot reassign cases - keep original assignment
+      newAssignedTo = existingCaseData.assigned_to || undefined;
+    }
+
     // Build update object
     const updateData = {
       status: caseData.status,
@@ -131,7 +160,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       client_id: caseData.client_id || null,
       insurance_id: caseData.insurance_id || null,
       insurance_policy_number: caseData.insurance_policy_number || null,
-      assigned_to: caseData.assigned_to || null,
+      assigned_to: newAssignedTo || null,
       is_medical: caseData.is_medical,
       is_documented: caseData.is_documented,
       complaints: caseData.complaints || null,
@@ -174,6 +203,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) throw error;
+
+    // Send notifications for assignment changes
+    if (newAssignedTo && newAssignedTo !== existingCaseData.assigned_to) {
+      await notifyCaseReassigned(
+        newAssignedTo,
+        existingCaseData.assigned_to,
+        id,
+        existingCaseData.case_number,
+        user.id
+      );
+    }
+
+    // Send notification for status changes (to assigned user)
+    if (caseData.status !== existingCaseData.status && existingCaseData.assigned_to) {
+      await notifyCaseStatusChanged(
+        existingCaseData.assigned_to,
+        id,
+        existingCaseData.case_number,
+        existingCaseData.status,
+        caseData.status,
+        user.id
+      );
+    }
 
     return NextResponse.json({
       success: true,

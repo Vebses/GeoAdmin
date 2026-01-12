@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { notifyUserRegistered } from '@/lib/notifications';
 import crypto from 'crypto';
 
 // Create admin client for user creation
@@ -120,6 +121,13 @@ export async function POST(request: NextRequest) {
         accepted_at: new Date().toISOString(),
       })
       .eq('id', invitation.id);
+
+    // NOTIFY MANAGERS that a new user has registered
+    await notifyUserRegistered(
+      authData.user.id,
+      full_name,
+      invitation.role
+    );
 
     return NextResponse.json({
       success: true,

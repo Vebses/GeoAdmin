@@ -25,6 +25,7 @@ interface CaseEditPanelProps {
   loading?: boolean;
   partners: Partner[];
   users: UserType[];
+  currentUser?: UserType | null;
 }
 
 const priorityOptions = [
@@ -42,8 +43,11 @@ export function CaseEditPanel({
   loading = false,
   partners,
   users,
+  currentUser,
 }: CaseEditPanelProps) {
   const isEdit = !!caseData;
+  const isManager = currentUser?.role === 'manager';
+  const isAssistant = currentUser?.role === 'assistant';
   
   const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager');
   const insurancePartners = partners.filter(p => p.category_id); // TODO: Filter by insurance category
@@ -108,6 +112,7 @@ export function CaseEditPanel({
           opened_at: new Date(caseData.opened_at),
         });
       } else {
+        // New case - for assistants, auto-assign to themselves
         reset({
           status: 'draft',
           priority: 'normal',
@@ -119,7 +124,7 @@ export function CaseEditPanel({
           client_id: undefined,
           insurance_id: undefined,
           insurance_policy_number: '',
-          assigned_to: undefined,
+          assigned_to: isAssistant ? currentUser?.id : undefined,
           is_medical: true,
           is_documented: false,
           complaints: '',
@@ -130,7 +135,7 @@ export function CaseEditPanel({
         });
       }
     }
-  }, [isOpen, caseData, reset]);
+  }, [isOpen, caseData, reset, isAssistant, currentUser?.id]);
 
   const onSubmit = (data: CaseFormData) => {
     onSave(data);
@@ -256,21 +261,36 @@ export function CaseEditPanel({
                   name="assigned_to"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="აირჩიეთ ასისტანტი..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
-                        {assistants.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    isManager ? (
+                      // Managers can select any assistant
+                      <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="აირჩიეთ ასისტანტი..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
+                          {assistants.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      // Non-managers (assistants) see their own name, disabled
+                      <Input
+                        value={currentUser?.full_name || '—'}
+                        disabled
+                        className="bg-gray-50"
+                      />
+                    )
                   )}
                 />
+                {isAssistant && !isEdit && (
+                  <p className="text-[10px] text-gray-500">
+                    ქეისი ავტომატურად მიენიჭება თქვენ
+                  </p>
+                )}
               </div>
             </div>
 

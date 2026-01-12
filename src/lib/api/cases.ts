@@ -8,6 +8,7 @@ interface CasesParams {
   search?: string;
   page?: number;
   limit?: number;
+  my_cases?: boolean;
 }
 
 interface ApiResponse<T> {
@@ -34,6 +35,7 @@ export async function getCases(params: CasesParams = {}): Promise<PaginatedRespo
   if (params.search) searchParams.set('search', params.search);
   if (params.page) searchParams.set('page', params.page.toString());
   if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.my_cases) searchParams.set('my_cases', 'true');
 
   const response = await fetch(`/api/cases?${searchParams.toString()}`);
   const result: ApiResponse<CaseWithRelations[]> = await response.json();

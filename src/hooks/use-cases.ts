@@ -17,6 +17,7 @@ interface UseCasesParams {
   search?: string;
   page?: number;
   limit?: number;
+  my_cases?: boolean;
 }
 
 export const CASES_QUERY_KEY = ['cases'];

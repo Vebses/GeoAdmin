@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
+import { notifyCaseAssigned } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +16,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get current user's profile for role-based filtering
+    const { data: currentUserProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
     // Parse query params
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
@@ -25,6 +33,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
+    const my_cases = searchParams.get('my_cases') === 'true';
 
     // Build query
     let query = supabase
@@ -56,9 +65,14 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('status', status);
     }
-    if (assigned_to) {
+    
+    // For my_cases filter or if assistant filtering their own
+    if (my_cases || (assigned_to && assigned_to === user.id)) {
+      query = query.eq('assigned_to', user.id);
+    } else if (assigned_to) {
       query = query.eq('assigned_to', assigned_to);
     }
+    
     if (client_id) {
       query = query.eq('client_id', client_id);
     }
@@ -106,6 +120,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get current user's profile
+    const { data: currentUserProfile } = await supabase
+      .from('users')
+      .select('id, role, full_name')
+      .eq('id', user.id)
+      .single();
+
+    const userRole = (currentUserProfile as any)?.role || 'assistant';
+
     // Parse and validate request body
     const body = await request.json();
     const validationResult = caseSchema.safeParse(body);
@@ -125,6 +148,18 @@ export async function POST(request: Request) {
     }
 
     const caseData = validationResult.data;
+
+    // IMPORTANT: For assistants, always assign case to themselves
+    // For managers, use selected assigned_to or default to themselves
+    let assignedTo = caseData.assigned_to;
+    
+    if (userRole === 'assistant') {
+      // Assistants can only create cases assigned to themselves
+      assignedTo = user.id;
+    } else if (!assignedTo) {
+      // Managers default to themselves if no assistant selected
+      assignedTo = user.id;
+    }
 
     // Generate case number
     const year = new Date().getFullYear();
@@ -156,7 +191,7 @@ export async function POST(request: Request) {
       client_id: caseData.client_id || null,
       insurance_id: caseData.insurance_id || null,
       insurance_policy_number: caseData.insurance_policy_number || null,
-      assigned_to: caseData.assigned_to || null,
+      assigned_to: assignedTo,
       is_medical: caseData.is_medical,
       is_documented: caseData.is_documented,
       complaints: caseData.complaints || null,
@@ -194,6 +229,16 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    // Send notification if assigned to someone else (manager assigning to assistant)
+    if (assignedTo && assignedTo !== user.id) {
+      await notifyCaseAssigned(
+        assignedTo,
+        (newCase as any).id,
+        caseNumber,
+        user.id
+      );
+    }
 
     return NextResponse.json({
       success: true,

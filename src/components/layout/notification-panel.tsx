@@ -4,7 +4,22 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ka } from 'date-fns/locale';
-import { Bell, FileText, Receipt, Check, X, Loader2, CheckCircle } from 'lucide-react';
+import { 
+  Bell, 
+  FileText, 
+  Receipt, 
+  Check, 
+  X, 
+  Loader2, 
+  CheckCircle, 
+  UserPlus, 
+  ArrowRightLeft,
+  UserMinus,
+  RefreshCw,
+  AlertTriangle,
+  File,
+  Info
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -47,11 +62,37 @@ export function NotificationPanel({ isOpen, onClose, userId }: NotificationPanel
 
   const getIcon = (type: string) => {
     switch (type) {
+      // User notifications
+      case 'user_registered':
+        return UserPlus;
+      
+      // Case notifications
       case 'case_assigned':
-      case 'case_completed':
         return FileText;
+      case 'case_reassigned':
+        return ArrowRightLeft;
+      case 'case_unassigned':
+        return UserMinus;
+      case 'case_status_changed':
+      case 'case_completed':
+        return RefreshCw;
+      
+      // Invoice notifications
+      case 'invoice_created':
       case 'invoice_paid':
+      case 'invoice_status_changed':
         return Receipt;
+      case 'invoice_overdue':
+        return AlertTriangle;
+      
+      // Document notifications
+      case 'document_uploaded':
+        return File;
+      
+      // System notifications
+      case 'system_announcement':
+        return Info;
+      
       default:
         return Bell;
     }
@@ -59,14 +100,47 @@ export function NotificationPanel({ isOpen, onClose, userId }: NotificationPanel
 
   const getIconColors = (type: string) => {
     switch (type) {
+      // User - green
+      case 'user_registered':
+        return { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' };
+      
+      // Case assigned - blue
       case 'case_assigned':
-        return { bg: 'bg-blue-100', text: 'text-blue-600' };
+        return { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' };
+      
+      // Case reassigned - amber
+      case 'case_reassigned':
+        return { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' };
+      
+      // Case unassigned - gray
+      case 'case_unassigned':
+        return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200' };
+      
+      // Case status - purple
+      case 'case_status_changed':
       case 'case_completed':
-        return { bg: 'bg-green-100', text: 'text-green-600' };
+        return { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' };
+      
+      // Invoice - emerald
+      case 'invoice_created':
       case 'invoice_paid':
-        return { bg: 'bg-emerald-100', text: 'text-emerald-600' };
+      case 'invoice_status_changed':
+        return { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' };
+      
+      // Invoice overdue - red
+      case 'invoice_overdue':
+        return { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200' };
+      
+      // Document - cyan
+      case 'document_uploaded':
+        return { bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-200' };
+      
+      // System - slate
+      case 'system_announcement':
+        return { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
+      
       default:
-        return { bg: 'bg-gray-100', text: 'text-gray-600' };
+        return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
     }
   };
 
@@ -85,8 +159,10 @@ export function NotificationPanel({ isOpen, onClose, userId }: NotificationPanel
     if (!notification.is_read) {
       markOneAsRead(notification.id);
     }
-    if (notification.link) {
-      router.push(notification.link);
+    // Use action_url if available, otherwise fall back to link
+    const targetUrl = (notification as any).action_url || notification.link;
+    if (targetUrl) {
+      router.push(targetUrl);
       onClose();
     }
   };
@@ -136,14 +212,15 @@ export function NotificationPanel({ isOpen, onClose, userId }: NotificationPanel
                   onClick={() => handleNotificationClick(notification)}
                   className={cn(
                     'px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors',
-                    !notification.is_read && 'bg-blue-50/50'
+                    !notification.is_read && 'bg-blue-50/30'
                   )}
                 >
                   <div className="flex gap-3">
                     <div
                       className={cn(
-                        'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-                        colors.bg
+                        'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border',
+                        colors.bg,
+                        colors.border
                       )}
                     >
                       <Icon size={14} className={colors.text} />
