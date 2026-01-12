@@ -92,6 +92,7 @@ export function InviteUserDialog({ isOpen, onClose, onSuccess }: InviteUserDialo
       onSuccess?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'მოწვევა ვერ მოხერხდა');
+      console.error('Invite error:', error);
     } finally {
       setIsLoading(false);
     }

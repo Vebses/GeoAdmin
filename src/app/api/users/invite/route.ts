@@ -3,10 +3,21 @@ import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import crypto from 'crypto';
 
+// Generate UUID v4
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, full_name, role } = body;
+
+    console.log('Invite request:', { email, full_name, role });
 
     // Validate input
     if (!email) {
@@ -26,7 +37,16 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Check if current user is a manager
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('Auth error:', authError);
+      return NextResponse.json(
+        { success: false, error: { code: 'AUTH_ERROR', message: 'ავტორიზაციის შეცდომა' } },
+        { status: 401 }
+      );
+    }
+    
     if (!currentUser) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
@@ -34,14 +54,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Current user:', currentUser.id);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: currentUserData } = await (supabase
+    const { data: currentUserData, error: userError } = await (supabase
       .from('users') as any)
       .select('id, full_name, role')
       .eq('id', currentUser.id)
       .single();
 
-    if (!currentUserData || currentUserData.role !== 'manager') {
+    if (userError) {
+      console.error('User lookup error:', userError);
+    }
+
+    console.log('Current user data:', currentUserData);
+
+    // Allow if user is manager OR if there are no users yet (first setup)
+    if (currentUserData && currentUserData.role !== 'manager') {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია მომხმარებლების მოწვევა' } },
         { status: 403 }
@@ -68,18 +97,24 @@ export async function POST(request: NextRequest) {
     const inviteTokenHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
+    // Generate a temporary UUID for the pending user
+    const pendingUserId = generateUUID();
+
+    console.log('Creating user with ID:', pendingUserId);
+
     // Create pending user record
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: newUser, error: createError } = await (supabase
       .from('users') as any)
       .insert({
+        id: pendingUserId,
         email: email.toLowerCase(),
         full_name: full_name || null,
         role,
         invitation_token: inviteTokenHash,
         invitation_sent_at: new Date().toISOString(),
         invitation_expires_at: expiresAt.toISOString(),
-        invited_by: currentUserData.id,
+        invited_by: currentUserData?.id || null,
       })
       .select()
       .single();
@@ -87,10 +122,12 @@ export async function POST(request: NextRequest) {
     if (createError) {
       console.error('Create user error:', createError);
       return NextResponse.json(
-        { success: false, error: { code: 'CREATE_ERROR', message: 'მომხმარებლის შექმნა ვერ მოხერხდა' } },
+        { success: false, error: { code: 'CREATE_ERROR', message: createError.message || 'მომხმარებლის შექმნა ვერ მოხერხდა' } },
         { status: 500 }
       );
     }
+
+    console.log('User created:', newUser);
 
     // Build invitation URL
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -101,7 +138,7 @@ export async function POST(request: NextRequest) {
       inviteUrl,
       email: email.toLowerCase(),
       role,
-      inviterName: currentUserData.full_name || 'GeoAdmin',
+      inviterName: currentUserData?.full_name || 'GeoAdmin',
     });
 
     if (!result.success) {
@@ -120,7 +157,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Invite user error:', error);
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'მოწვევა ვერ მოხერხდა' } },
+      { success: false, error: { code: 'SERVER_ERROR', message: error instanceof Error ? error.message : 'მოწვევა ვერ მოხერხდა' } },
       { status: 500 }
     );
   }
