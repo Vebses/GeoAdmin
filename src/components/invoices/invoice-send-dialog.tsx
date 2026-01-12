@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InvoiceEmailPreview } from './invoice-email-preview';
@@ -34,6 +35,11 @@ export function InvoiceSendDialog({
   const [ccEmails, setCcEmails] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  
+  // Document attachment checkboxes
+  const [attachPatientDocs, setAttachPatientDocs] = useState(false);
+  const [attachOriginalDocs, setAttachOriginalDocs] = useState(false);
+  const [attachMedicalDocs, setAttachMedicalDocs] = useState(false);
 
   // Preview data
   const [previewData, setPreviewData] = useState<{
@@ -45,9 +51,14 @@ export function InvoiceSendDialog({
     attachments?: Array<{ name: string; type: string }>;
   } | null>(null);
 
-  // Load preview data
+  // Load preview data and initialize attachment settings from invoice
   useEffect(() => {
     if (isOpen && invoice.id) {
+      // Initialize attachment settings from invoice
+      setAttachPatientDocs(invoice.attach_patient_docs || false);
+      setAttachOriginalDocs(invoice.attach_original_docs || false);
+      setAttachMedicalDocs(invoice.attach_medical_docs || false);
+      
       setPreviewLoading(true);
       fetch(`/api/invoices/${invoice.id}/preview`)
         .then((res) => res.json())
@@ -68,7 +79,7 @@ export function InvoiceSendDialog({
           setPreviewLoading(false);
         });
     }
-  }, [isOpen, invoice.id]);
+  }, [isOpen, invoice.id, invoice.attach_patient_docs, invoice.attach_original_docs, invoice.attach_medical_docs]);
 
   // Handle send
   const handleSend = async () => {
@@ -90,6 +101,10 @@ export function InvoiceSendDialog({
             .filter(Boolean),
           subject: subject.trim() || undefined,
           body: body.trim() || undefined,
+          // Pass attachment flags
+          attach_patient_docs: attachPatientDocs,
+          attach_original_docs: attachOriginalDocs,
+          attach_medical_docs: attachMedicalDocs,
         }),
       });
 
@@ -196,9 +211,37 @@ export function InvoiceSendDialog({
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   placeholder={previewData?.body}
-                  rows={10}
+                  rows={6}
                   className="text-sm resize-none"
                 />
+              </div>
+
+              {/* Document Attachments */}
+              <div className="space-y-2">
+                <Label className="text-xs">დოკუმენტების თანდართვა</Label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={attachPatientDocs}
+                      onCheckedChange={(checked) => setAttachPatientDocs(!!checked)}
+                    />
+                    <span className="text-xs text-gray-600">პაციენტის დოკუმენტები</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={attachOriginalDocs}
+                      onCheckedChange={(checked) => setAttachOriginalDocs(!!checked)}
+                    />
+                    <span className="text-xs text-gray-600">ორიგინალი დოკუმენტები</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={attachMedicalDocs}
+                      onCheckedChange={(checked) => setAttachMedicalDocs(!!checked)}
+                    />
+                    <span className="text-xs text-gray-600">სამედიცინო დოკუმენტები</span>
+                  </label>
+                </div>
               </div>
 
               {/* Attachments info */}

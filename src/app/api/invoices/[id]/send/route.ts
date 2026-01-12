@@ -14,6 +14,10 @@ interface SendRequest {
   subject?: string;
   body?: string;
   regenerate_pdf?: boolean;
+  // Attachment flags - if provided, override invoice settings
+  attach_patient_docs?: boolean;
+  attach_original_docs?: boolean;
+  attach_medical_docs?: boolean;
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -80,18 +84,52 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Fetch additional attachments if needed
     const additionalAttachments: Array<{ filename: string; content: Buffer }> = [];
 
+    // Use request body flags if provided, otherwise fall back to invoice settings
+    const shouldAttachPatientDocs = body.attach_patient_docs ?? typedInvoice.attach_patient_docs ?? false;
+    const shouldAttachOriginalDocs = body.attach_original_docs ?? typedInvoice.attach_original_docs ?? false;
+    const shouldAttachMedicalDocs = body.attach_medical_docs ?? typedInvoice.attach_medical_docs ?? false;
+
+    console.log('Invoice attachment settings:', {
+      from_request: {
+        attach_patient_docs: body.attach_patient_docs,
+        attach_original_docs: body.attach_original_docs,
+        attach_medical_docs: body.attach_medical_docs,
+      },
+      from_invoice: {
+        attach_patient_docs: typedInvoice.attach_patient_docs,
+        attach_original_docs: typedInvoice.attach_original_docs,
+        attach_medical_docs: typedInvoice.attach_medical_docs,
+      },
+      resolved: {
+        attach_patient_docs: shouldAttachPatientDocs,
+        attach_original_docs: shouldAttachOriginalDocs,
+        attach_medical_docs: shouldAttachMedicalDocs,
+      },
+      case_id: typedInvoice.case_id,
+    });
+
     // Helper function to fetch document attachments
     const fetchDocumentAttachments = async (caseId: string, docType: string) => {
-      const { data: docs } = await supabase
+      console.log(`Fetching ${docType} documents for case:`, caseId);
+      
+      const { data: docs, error } = await supabase
         .from('case_documents')
         .select('*')
         .eq('case_id', caseId)
-        .eq('document_type', docType);
+        .eq('type', docType);  // Column is 'type', not 'document_type'
+
+      if (error) {
+        console.error(`Error fetching ${docType} documents:`, error);
+        return;
+      }
+
+      console.log(`Found ${docs?.length || 0} ${docType} documents`);
 
       if (docs) {
         for (const doc of docs as Array<{ file_url: string; file_name: string }>) {
           if (doc.file_url) {
             try {
+              console.log(`Fetching document: ${doc.file_name} from ${doc.file_url}`);
               const response = await fetch(doc.file_url);
               if (response.ok) {
                 const buffer = await response.arrayBuffer();
@@ -99,6 +137,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   filename: doc.file_name,
                   content: Buffer.from(buffer),
                 });
+                console.log(`Successfully fetched: ${doc.file_name}`);
+              } else {
+                console.warn(`Failed to fetch document (${response.status}): ${doc.file_name}`);
               }
             } catch (err) {
               console.warn(`Failed to fetch document: ${doc.file_name}`, err);
@@ -108,16 +149,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     };
 
-    // Fetch attachments based on invoice settings
-    if (typedInvoice.attach_patient_docs) {
+    // Fetch attachments based on resolved settings
+    if (shouldAttachPatientDocs) {
       await fetchDocumentAttachments(typedInvoice.case_id, 'patient');
     }
-    if (typedInvoice.attach_original_docs) {
+    if (shouldAttachOriginalDocs) {
       await fetchDocumentAttachments(typedInvoice.case_id, 'original');
     }
-    if (typedInvoice.attach_medical_docs) {
+    if (shouldAttachMedicalDocs) {
       await fetchDocumentAttachments(typedInvoice.case_id, 'medical');
     }
+
+    console.log(`Total additional attachments: ${additionalAttachments.length}`);
 
     // Send email
     const sendResult = await sendInvoiceEmail({
