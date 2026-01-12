@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/users/invite-user-dialog';
 import { useUsers } from '@/hooks/use-users';
+import { useInvitations, useCancelInvitation, type PendingInvitation } from '@/hooks/use-invitations';
 import { toast } from 'sonner';
 import type { User } from '@/types';
 
@@ -39,15 +40,11 @@ const roleLabels: Record<string, { label: string; color: string }> = {
   accountant: { label: 'ბუღალტერი', color: 'bg-purple-100 text-purple-700' },
 };
 
-// Extended user type for pending invitations
-interface UserWithInvite extends User {
-  invitation_token?: string | null;
-  invitation_sent_at?: string | null;
-  invitation_expires_at?: string | null;
-}
-
 export default function UsersPage() {
-  const { data: users = [], isLoading, refetch } = useUsers();
+  const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useUsers();
+  const { data: invitations = [], isLoading: invitationsLoading, refetch: refetchInvitations } = useInvitations();
+  const cancelInvitation = useCancelInvitation();
+  
   const [search, setSearch] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -55,15 +52,19 @@ export default function UsersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
+  const isLoading = usersLoading || invitationsLoading;
+
   // Filter users
   const filteredUsers = users.filter(user => 
     user.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     user.email?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Separate active users and pending invitations
-  const activeUsers = filteredUsers.filter(u => !(u as UserWithInvite).invitation_token);
-  const pendingInvitations = filteredUsers.filter(u => (u as UserWithInvite).invitation_token);
+  // Filter invitations
+  const filteredInvitations = invitations.filter(inv =>
+    inv.email?.toLowerCase().includes(search.toLowerCase()) ||
+    inv.full_name?.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -90,7 +91,7 @@ export default function UsersPage() {
       toast.success('მომხმარებელი განახლდა');
       setIsEditOpen(false);
       setEditingUser(null);
-      refetch();
+      refetchUsers();
     } catch (error) {
       toast.error('განახლება ვერ მოხერხდა');
     } finally {
@@ -110,31 +111,24 @@ export default function UsersPage() {
       
       toast.success('მომხმარებელი წაიშალა');
       setDeleteUser(null);
-      refetch();
+      refetchUsers();
     } catch (error) {
       toast.error('წაშლა ვერ მოხერხდა');
     }
   };
 
-  const handleCancelInvitation = async (user: User) => {
+  const handleCancelInvitation = async (invitation: PendingInvitation) => {
     try {
-      const response = await fetch(`/api/users/${user.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Failed to cancel');
-      
+      await cancelInvitation.mutateAsync(invitation.id);
       toast.success('მოწვევა გაუქმდა');
-      refetch();
     } catch (error) {
       toast.error('გაუქმება ვერ მოხერხდა');
     }
   };
 
-  const handleResendInvitation = async (user: UserWithInvite) => {
+  const handleResendInvitation = async (invitation: PendingInvitation) => {
     toast.info('მოწვევის ხელახლა გაგზავნა...');
-    // This would need a separate API endpoint to resend
-    // For now, just show a message
+    // TODO: Implement resend
     toast.success('მოწვევა ხელახლა გაიგზავნა');
   };
 
@@ -178,74 +172,71 @@ export default function UsersPage() {
       </div>
 
       {/* Pending Invitations */}
-      {pendingInvitations.length > 0 && (
+      {filteredInvitations.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
           <div className="px-4 py-2 bg-amber-100 border-b border-amber-200">
             <span className="text-sm font-medium text-amber-800 flex items-center gap-2">
               <Clock size={14} />
-              მოლოდინში ({pendingInvitations.length})
+              მოლოდინში ({filteredInvitations.length})
             </span>
           </div>
           <div className="divide-y divide-amber-200">
-            {pendingInvitations.map((user) => {
-              const inviteUser = user as UserWithInvite;
-              return (
-                <div key={user.id} className="flex items-center gap-4 px-4 py-3">
-                  {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium text-amber-700">?</span>
-                  </div>
+            {filteredInvitations.map((invitation) => (
+              <div key={invitation.id} className="flex items-center gap-4 px-4 py-3">
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-medium text-amber-700">?</span>
+                </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {user.email}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-amber-700">
-                      <span className="flex items-center gap-1">
-                        <Clock size={12} />
-                        მოწვეული: {inviteUser.invitation_sent_at ? new Date(inviteUser.invitation_sent_at).toLocaleDateString('ka-GE') : '—'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Role */}
-                  <Badge className={roleLabels[user.role || 'assistant'].color}>
-                    {roleLabels[user.role || 'assistant'].label}
-                  </Badge>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleResendInvitation(inviteUser)}
-                    >
-                      <RefreshCw size={12} className="mr-1" />
-                      ხელახლა
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => handleCancelInvitation(user)}
-                    >
-                      <X size={12} className="mr-1" />
-                      გაუქმება
-                    </Button>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {invitation.full_name || invitation.email}
+                  </p>
+                  <div className="flex items-center gap-3 text-xs text-amber-700">
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      მოწვეული: {new Date(invitation.created_at).toLocaleDateString('ka-GE')}
+                    </span>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Role */}
+                <Badge className={roleLabels[invitation.role || 'assistant'].color}>
+                  {roleLabels[invitation.role || 'assistant'].label}
+                </Badge>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => handleResendInvitation(invitation)}
+                  >
+                    <RefreshCw size={12} className="mr-1" />
+                    ხელახლა
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleCancelInvitation(invitation)}
+                  >
+                    <X size={12} className="mr-1" />
+                    გაუქმება
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Active Users List */}
-      {activeUsers.length > 0 ? (
+      {filteredUsers.length > 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-          {activeUsers.map((user) => (
+          {filteredUsers.map((user) => (
             <div key={user.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50/50 transition-colors">
               {/* Avatar */}
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -329,7 +320,7 @@ export default function UsersPage() {
       <InviteUserDialog
         isOpen={isInviteOpen}
         onClose={() => setIsInviteOpen(false)}
-        onSuccess={() => refetch()}
+        onSuccess={() => refetchInvitations()}
       />
 
       {/* Edit Dialog */}

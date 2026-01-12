@@ -1,29 +1,54 @@
 -- ============================================
--- USER INVITATION AND PASSWORD RESET TOKENS
+-- USER INVITATIONS TABLE (separate from users)
 -- ============================================
 
--- Add invitation fields to users table
-ALTER TABLE public.users 
-ADD COLUMN IF NOT EXISTS invitation_token TEXT,
-ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS invitation_accepted_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS invited_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+-- Create user_invitations table for pending invitations
+CREATE TABLE IF NOT EXISTS public.user_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT,
+  role TEXT NOT NULL DEFAULT 'assistant' CHECK (role IN ('manager', 'assistant', 'accountant')),
+  invitation_token TEXT NOT NULL,
+  invited_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ,
+  
+  CONSTRAINT valid_expiry CHECK (expires_at > created_at)
+);
 
--- Add password reset fields to users table
+-- Index for token lookups
+CREATE INDEX IF NOT EXISTS idx_user_invitations_token ON public.user_invitations(invitation_token);
+CREATE INDEX IF NOT EXISTS idx_user_invitations_email ON public.user_invitations(email);
+
+-- Add password reset fields to users table (these are OK since user already exists)
 ALTER TABLE public.users 
 ADD COLUMN IF NOT EXISTS reset_token TEXT,
 ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMPTZ;
 
--- Create indexes for token lookups
-CREATE INDEX IF NOT EXISTS idx_users_invitation_token ON public.users(invitation_token) WHERE invitation_token IS NOT NULL;
+-- Index for reset token lookups
 CREATE INDEX IF NOT EXISTS idx_users_reset_token ON public.users(reset_token) WHERE reset_token IS NOT NULL;
 
+-- Enable RLS
+ALTER TABLE public.user_invitations ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for user_invitations
+CREATE POLICY "Managers can view all invitations" ON public.user_invitations
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'manager')
+  );
+
+CREATE POLICY "Managers can create invitations" ON public.user_invitations
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'manager')
+  );
+
+CREATE POLICY "Managers can delete invitations" ON public.user_invitations
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'manager')
+  );
+
 -- Comments
-COMMENT ON COLUMN public.users.invitation_token IS 'Hashed token for user invitation';
-COMMENT ON COLUMN public.users.invitation_sent_at IS 'When the invitation was sent';
-COMMENT ON COLUMN public.users.invitation_expires_at IS 'When the invitation expires';
-COMMENT ON COLUMN public.users.invitation_accepted_at IS 'When the user accepted the invitation';
-COMMENT ON COLUMN public.users.invited_by IS 'User who sent the invitation';
-COMMENT ON COLUMN public.users.reset_token IS 'Hashed token for password reset';
-COMMENT ON COLUMN public.users.reset_token_expires_at IS 'When the reset token expires';
+COMMENT ON TABLE public.user_invitations IS 'Pending user invitations';
+COMMENT ON COLUMN public.user_invitations.invitation_token IS 'Hashed token for invitation verification';
+COMMENT ON COLUMN public.user_invitations.expires_at IS 'When the invitation expires (48 hours from creation)';

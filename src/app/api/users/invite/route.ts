@@ -3,21 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import crypto from 'crypto';
 
-// Generate UUID v4
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, full_name, role } = body;
-
-    console.log('Invite request:', { email, full_name, role });
 
     // Validate input
     if (!email) {
@@ -37,16 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Check if current user is a manager
-    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error('Auth error:', authError);
-      return NextResponse.json(
-        { success: false, error: { code: 'AUTH_ERROR', message: 'ავტორიზაციის შეცდომა' } },
-        { status: 401 }
-      );
-    }
-    
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
@@ -54,22 +34,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Current user:', currentUser.id);
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: currentUserData, error: userError } = await (supabase
+    const { data: currentUserData } = await (supabase
       .from('users') as any)
       .select('id, full_name, role')
       .eq('id', currentUser.id)
       .single();
 
-    if (userError) {
-      console.error('User lookup error:', userError);
-    }
-
-    console.log('Current user data:', currentUserData);
-
-    // Allow if user is manager OR if there are no users yet (first setup)
+    // Check if user is manager
     if (currentUserData && currentUserData.role !== 'manager') {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია მომხმარებლების მოწვევა' } },
@@ -77,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
+    // Check if user already exists in users table
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingUser } = await (supabase
       .from('users') as any)
@@ -92,42 +64,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if invitation already exists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingInvite } = await (supabase
+      .from('user_invitations') as any)
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .is('accepted_at', null)
+      .single();
+
+    if (existingInvite) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVITE_EXISTS', message: 'ამ ელ-ფოსტაზე მოწვევა უკვე გაგზავნილია' } },
+        { status: 400 }
+      );
+    }
+
     // Generate invitation token
     const inviteToken = crypto.randomBytes(32).toString('hex');
     const inviteTokenHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
-    // Generate a temporary UUID for the pending user
-    const pendingUserId = generateUUID();
-
-    console.log('Creating user with ID:', pendingUserId);
-
-    // Create pending user record
+    // Create invitation record
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newUser, error: createError } = await (supabase
-      .from('users') as any)
+    const { data: newInvite, error: createError } = await (supabase
+      .from('user_invitations') as any)
       .insert({
-        id: pendingUserId,
         email: email.toLowerCase(),
         full_name: full_name || null,
         role,
         invitation_token: inviteTokenHash,
-        invitation_sent_at: new Date().toISOString(),
-        invitation_expires_at: expiresAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
         invited_by: currentUserData?.id || null,
       })
       .select()
       .single();
 
     if (createError) {
-      console.error('Create user error:', createError);
+      console.error('Create invitation error:', createError);
       return NextResponse.json(
-        { success: false, error: { code: 'CREATE_ERROR', message: createError.message || 'მომხმარებლის შექმნა ვერ მოხერხდა' } },
+        { success: false, error: { code: 'CREATE_ERROR', message: createError.message || 'მოწვევის შექმნა ვერ მოხერხდა' } },
         { status: 500 }
       );
     }
-
-    console.log('User created:', newUser);
 
     // Build invitation URL
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -149,9 +128,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        id: newUser.id,
-        email: newUser.email,
-        role: newUser.role,
+        id: newInvite.id,
+        email: newInvite.email,
+        role: newInvite.role,
       },
     });
   } catch (error) {
@@ -176,13 +155,13 @@ export async function GET() {
       );
     }
 
-    // Get pending invitations (users with invitation_token set)
+    // Get pending invitations from user_invitations table
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: invitations, error } = await (supabase
-      .from('users') as any)
-      .select('id, email, full_name, role, invitation_sent_at, invitation_expires_at')
-      .not('invitation_token', 'is', null)
-      .order('invitation_sent_at', { ascending: false });
+      .from('user_invitations') as any)
+      .select('id, email, full_name, role, created_at, expires_at')
+      .is('accepted_at', null)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Get invitations error:', error);

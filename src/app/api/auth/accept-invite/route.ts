@@ -51,23 +51,31 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find user with this invitation token
+    // Find invitation with this token
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: pendingUser, error: findError } = await (supabase
-      .from('users') as any)
-      .select('id, email, role, invitation_expires_at')
+    const { data: invitation, error: findError } = await (supabase
+      .from('user_invitations') as any)
+      .select('id, email, role, expires_at, accepted_at')
       .eq('invitation_token', tokenHash)
       .single();
 
-    if (findError || !pendingUser) {
+    if (findError || !invitation) {
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_TOKEN', message: 'არასწორი ან ვადაგასული მოწვევა' } },
         { status: 400 }
       );
     }
 
+    // Check if already accepted
+    if (invitation.accepted_at) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ALREADY_ACCEPTED', message: 'მოწვევა უკვე გამოყენებულია' } },
+        { status: 400 }
+      );
+    }
+
     // Check if invitation has expired
-    if (new Date(pendingUser.invitation_expires_at) < new Date()) {
+    if (new Date(invitation.expires_at) < new Date()) {
       return NextResponse.json(
         { success: false, error: { code: 'EXPIRED_TOKEN', message: 'მოწვევის ვადა ამოიწურა' } },
         { status: 400 }
@@ -78,7 +86,7 @@ export async function POST(request: NextRequest) {
     const adminClient = getAdminClient();
     
     const { data: authData, error: createAuthError } = await adminClient.auth.admin.createUser({
-      email: pendingUser.email,
+      email: invitation.email,
       password,
       email_confirm: true, // Auto-confirm email since they got the invite
       user_metadata: {
@@ -94,29 +102,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update the user record with the auth user id and clear invitation token
+    // The user record should be auto-created by the trigger, but let's update it with the role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase
+    await (supabase
       .from('users') as any)
       .update({
-        id: authData.user.id,
         full_name,
-        invitation_token: null,
-        invitation_sent_at: null,
-        invitation_expires_at: null,
-        invitation_accepted_at: new Date().toISOString(),
+        role: invitation.role,
       })
-      .eq('id', pendingUser.id);
+      .eq('id', authData.user.id);
 
-    if (updateError) {
-      console.error('Update user error:', updateError);
-      // The auth user was created, so we should still return success
-    }
+    // Mark invitation as accepted
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase
+      .from('user_invitations') as any)
+      .update({
+        accepted_at: new Date().toISOString(),
+      })
+      .eq('id', invitation.id);
 
     return NextResponse.json({
       success: true,
       data: {
-        email: pendingUser.email,
+        email: invitation.email,
       },
     });
   } catch (error) {
@@ -141,27 +149,32 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find user with this token
+    // Find invitation with this token
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: user } = await (supabase
-      .from('users') as any)
-      .select('email, role, invitation_expires_at')
+    const { data: invitation } = await (supabase
+      .from('user_invitations') as any)
+      .select('email, role, expires_at, accepted_at')
       .eq('invitation_token', tokenHash)
       .single();
 
-    if (!user) {
+    if (!invitation) {
+      return NextResponse.json({ valid: false, email: null, role: null });
+    }
+
+    // Check if already accepted
+    if (invitation.accepted_at) {
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 
     // Check if token has expired
-    if (new Date(user.invitation_expires_at) < new Date()) {
+    if (new Date(invitation.expires_at) < new Date()) {
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 
     return NextResponse.json({ 
       valid: true, 
-      email: user.email,
-      role: user.role,
+      email: invitation.email,
+      role: invitation.role,
     });
   } catch (error) {
     console.error('Validate invite token error:', error);
