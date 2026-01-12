@@ -52,22 +52,55 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find invitation with this token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: invitation, error: findError } = await (supabase
-      .from('user_invitations') as any)
-      .select('id, email, role, expires_at, accepted_at')
-      .eq('invitation_token', tokenHash)
-      .single();
+    let invitation: { id: string; email: string; role: string; expires_at: string; accepted_at?: string | null } | null = null;
+    let isOldFormat = false;
 
-    if (findError || !invitation) {
+    // FIRST: Try to find invitation in NEW user_invitations table
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newInvitation, error: newError } = await (supabase
+        .from('user_invitations') as any)
+        .select('id, email, role, expires_at, accepted_at')
+        .eq('invitation_token', tokenHash)
+        .single();
+
+      if (!newError && newInvitation) {
+        invitation = newInvitation;
+      }
+    } catch (e) {
+      // Table might not exist, continue to old format
+      console.log('user_invitations table not found, trying old format');
+    }
+
+    // SECOND: If not found, try OLD format in users table
+    if (!invitation) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: oldInvitation, error: oldError } = await (supabase
+        .from('users') as any)
+        .select('id, email, role, invitation_expires_at, invitation_token')
+        .eq('invitation_token', tokenHash)
+        .single();
+
+      if (!oldError && oldInvitation && oldInvitation.invitation_token) {
+        invitation = {
+          id: oldInvitation.id,
+          email: oldInvitation.email,
+          role: oldInvitation.role,
+          expires_at: oldInvitation.invitation_expires_at,
+          accepted_at: null, // Old format doesn't track this
+        };
+        isOldFormat = true;
+      }
+    }
+
+    if (!invitation) {
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_TOKEN', message: 'არასწორი ან ვადაგასული მოწვევა' } },
         { status: 400 }
       );
     }
 
-    // Check if already accepted
+    // Check if already accepted (new format only)
     if (invitation.accepted_at) {
       return NextResponse.json(
         { success: false, error: { code: 'ALREADY_ACCEPTED', message: 'მოწვევა უკვე გამოყენებულია' } },
@@ -76,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if invitation has expired
-    if (new Date(invitation.expires_at) < new Date()) {
+    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
       return NextResponse.json(
         { success: false, error: { code: 'EXPIRED_TOKEN', message: 'მოწვევის ვადა ამოიწურა' } },
         { status: 400 }
@@ -103,31 +136,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // The user record should be auto-created by the trigger, but let's update it with the role
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase
-      .from('users') as any)
-      .update({
-        full_name,
-        role: invitation.role,
-      })
-      .eq('id', authData.user.id);
+    if (isOldFormat) {
+      // OLD FORMAT: 
+      // 1. The auth user creation trigger already created a new users record with the auth user's ID
+      // 2. We need to DELETE the old pending invitation record (the one with invitation_token)
+      // 3. And UPDATE the new user record with full_name and role
+      
+      // First, update the new user record created by trigger
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase
+        .from('users') as any)
+        .update({
+          full_name,
+          role: invitation.role,
+        })
+        .eq('id', authData.user.id);
+      
+      // Then, delete the old pending invitation record
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase
+        .from('users') as any)
+        .delete()
+        .eq('id', invitation.id);
+    } else {
+      // NEW FORMAT: Update user record created by trigger with role
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase
+        .from('users') as any)
+        .update({
+          full_name,
+          role: invitation.role,
+        })
+        .eq('id', authData.user.id);
 
-    // Mark invitation as accepted
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase
-      .from('user_invitations') as any)
-      .update({
-        accepted_at: new Date().toISOString(),
-      })
-      .eq('id', invitation.id);
+      // Mark invitation as accepted
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase
+        .from('user_invitations') as any)
+        .update({
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', invitation.id);
+    }
 
     // NOTIFY MANAGERS that a new user has registered
-    await notifyUserRegistered(
-      authData.user.id,
-      full_name,
-      invitation.role
-    );
+    try {
+      await notifyUserRegistered(
+        authData.user.id,
+        full_name,
+        invitation.role
+      );
+    } catch (e) {
+      console.error('Failed to notify managers:', e);
+    }
 
     return NextResponse.json({
       success: true,
@@ -157,13 +218,42 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find invitation with this token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: invitation } = await (supabase
-      .from('user_invitations') as any)
-      .select('email, role, expires_at, accepted_at')
-      .eq('invitation_token', tokenHash)
-      .single();
+    let invitation: { email: string; role: string; expires_at?: string; accepted_at?: string | null } | null = null;
+
+    // FIRST: Try to find invitation in NEW user_invitations table
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newInvitation } = await (supabase
+        .from('user_invitations') as any)
+        .select('email, role, expires_at, accepted_at')
+        .eq('invitation_token', tokenHash)
+        .single();
+
+      if (newInvitation) {
+        invitation = newInvitation;
+      }
+    } catch (e) {
+      // Table might not exist, continue to old format
+    }
+
+    // SECOND: If not found, try OLD format in users table
+    if (!invitation) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: oldInvitation } = await (supabase
+        .from('users') as any)
+        .select('email, role, invitation_expires_at, invitation_token')
+        .eq('invitation_token', tokenHash)
+        .single();
+
+      if (oldInvitation && oldInvitation.invitation_token) {
+        invitation = {
+          email: oldInvitation.email,
+          role: oldInvitation.role,
+          expires_at: oldInvitation.invitation_expires_at,
+          accepted_at: null,
+        };
+      }
+    }
 
     if (!invitation) {
       return NextResponse.json({ valid: false, email: null, role: null });
@@ -175,7 +265,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if token has expired
-    if (new Date(invitation.expires_at) < new Date()) {
+    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 

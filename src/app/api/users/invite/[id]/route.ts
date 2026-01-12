@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// DELETE - Cancel invitation
+// DELETE - Cancel invitation (handles both old and new format)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -33,19 +33,58 @@ export async function DELETE(
       );
     }
 
-    // Delete the invitation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase
-      .from('user_invitations') as any)
-      .delete()
-      .eq('id', id);
+    // Check URL param to determine which table to delete from
+    const url = new URL(request.url);
+    const source = url.searchParams.get('source') || 'new';
 
-    if (error) {
-      console.error('Delete invitation error:', error);
-      return NextResponse.json(
-        { success: false, error: { code: 'DELETE_ERROR', message: 'მოწვევის გაუქმება ვერ მოხერხდა' } },
-        { status: 500 }
-      );
+    if (source === 'old') {
+      // OLD FORMAT: Delete from users table (clear invitation fields)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase
+        .from('users') as any)
+        .delete()
+        .eq('id', id)
+        .not('invitation_token', 'is', null);
+
+      if (error) {
+        console.error('Delete old invitation error:', error);
+        return NextResponse.json(
+          { success: false, error: { code: 'DELETE_ERROR', message: 'მოწვევის გაუქმება ვერ მოხერხდა' } },
+          { status: 500 }
+        );
+      }
+    } else {
+      // NEW FORMAT: Delete from user_invitations table
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase
+          .from('user_invitations') as any)
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error('Delete invitation error:', error);
+          return NextResponse.json(
+            { success: false, error: { code: 'DELETE_ERROR', message: 'მოწვევის გაუქმება ვერ მოხერხდა' } },
+            { status: 500 }
+          );
+        }
+      } catch (e) {
+        // Table might not exist, try old format
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase
+          .from('users') as any)
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error('Delete old invitation fallback error:', error);
+          return NextResponse.json(
+            { success: false, error: { code: 'DELETE_ERROR', message: 'მოწვევის გაუქმება ვერ მოხერხდა' } },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

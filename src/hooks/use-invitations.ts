@@ -9,6 +9,7 @@ export interface PendingInvitation {
   role: string;
   created_at: string;
   expires_at: string;
+  source?: 'new' | 'old';
 }
 
 async function fetchInvitations(): Promise<PendingInvitation[]> {
@@ -20,8 +21,9 @@ async function fetchInvitations(): Promise<PendingInvitation[]> {
   return result.data || [];
 }
 
-async function cancelInvitation(id: string): Promise<void> {
-  const response = await fetch(`/api/users/invite/${id}`, {
+async function cancelInvitation({ id, source }: { id: string; source?: string }): Promise<void> {
+  const url = source ? `/api/users/invite/${id}?source=${source}` : `/api/users/invite/${id}`;
+  const response = await fetch(url, {
     method: 'DELETE',
   });
   if (!response.ok) {

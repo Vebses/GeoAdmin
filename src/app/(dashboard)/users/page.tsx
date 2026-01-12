@@ -119,7 +119,7 @@ export default function UsersPage() {
 
   const handleCancelInvitation = async (invitation: PendingInvitation) => {
     try {
-      await cancelInvitation.mutateAsync(invitation.id);
+      await cancelInvitation.mutateAsync({ id: invitation.id, source: invitation.source });
       toast.success('მოწვევა გაუქმდა');
     } catch (error) {
       toast.error('გაუქმება ვერ მოხერხდა');

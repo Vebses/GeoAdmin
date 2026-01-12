@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - List pending invitations
+// GET - List pending invitations (checks BOTH old format and new format)
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -155,25 +155,71 @@ export async function GET() {
       );
     }
 
-    // Get pending invitations from user_invitations table
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: invitations, error } = await (supabase
-      .from('user_invitations') as any)
-      .select('id, email, full_name, role, created_at, expires_at')
-      .is('accepted_at', null)
-      .order('created_at', { ascending: false });
+    const allInvitations: Array<{
+      id: string;
+      email: string;
+      full_name: string | null;
+      role: string;
+      created_at: string;
+      expires_at: string;
+      source: 'new' | 'old';
+    }> = [];
 
-    if (error) {
-      console.error('Get invitations error:', error);
-      return NextResponse.json(
-        { success: false, error: { code: 'FETCH_ERROR', message: 'მოწვევების ჩატვირთვა ვერ მოხერხდა' } },
-        { status: 500 }
-      );
+    // FIRST: Get from NEW user_invitations table
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newInvitations, error: newError } = await (supabase
+        .from('user_invitations') as any)
+        .select('id, email, full_name, role, created_at, expires_at')
+        .is('accepted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (!newError && newInvitations) {
+        for (const inv of newInvitations) {
+          allInvitations.push({
+            ...inv,
+            source: 'new',
+          });
+        }
+      }
+    } catch (e) {
+      // Table might not exist
+      console.log('user_invitations table not found');
+    }
+
+    // SECOND: Get from OLD users table (pending invitations with invitation_token)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: oldInvitations, error: oldError } = await (supabase
+        .from('users') as any)
+        .select('id, email, full_name, role, created_at, invitation_expires_at, invitation_token')
+        .not('invitation_token', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (!oldError && oldInvitations) {
+        for (const inv of oldInvitations) {
+          // Only add if not already in the list (by email)
+          if (!allInvitations.find(i => i.email === inv.email)) {
+            allInvitations.push({
+              id: inv.id,
+              email: inv.email,
+              full_name: inv.full_name,
+              role: inv.role,
+              created_at: inv.created_at,
+              expires_at: inv.invitation_expires_at,
+              source: 'old',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Column might not exist
+      console.log('Old invitation columns not found');
     }
 
     return NextResponse.json({
       success: true,
-      data: invitations || [],
+      data: allInvitations,
     });
   } catch (error) {
     console.error('Get invitations error:', error);
