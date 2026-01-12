@@ -5,6 +5,7 @@ import { Plus, Eye, Edit2, Trash2, Briefcase, ChevronLeft, ChevronRight } from '
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ConfirmDialog } from '@/components/ui';
+import { ExportButton } from '@/components/shared/export-button';
 import { CaseFilters, type CaseFiltersState } from './case-filters';
 import { CaseStatusBadge } from './case-status-badge';
 import { CaseViewPanel } from './case-view-panel';
@@ -17,6 +18,7 @@ import {
 } from '@/hooks/use-cases';
 import { usePartners } from '@/hooks/use-partners';
 import { useUsers } from '@/hooks/use-users';
+import { useRealtimeCases } from '@/hooks/use-realtime';
 import { formatDate } from '@/lib/utils/format';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { CaseWithRelations, CaseFormData, CaseStatus } from '@/types';
@@ -59,6 +61,9 @@ export function CaseList() {
   const createMutation = useCreateCase();
   const updateMutation = useUpdateCase();
   const deleteMutation = useDeleteCase();
+
+  // Enable realtime updates
+  useRealtimeCases();
 
   // Compute status counts
   const statusCounts = useMemo(() => {
@@ -146,10 +151,16 @@ export function CaseList() {
         <p className="text-xs text-gray-500">
           ქეისების სია და მართვა
         </p>
-        <Button size="sm" onClick={handleCreate}>
-          <Plus size={14} className="mr-1" />
-          ახალი ქეისი
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton 
+            entity="cases" 
+            filters={filters.status ? { status: filters.status } : undefined}
+          />
+          <Button size="sm" onClick={handleCreate}>
+            <Plus size={14} className="mr-1" />
+            ახალი ქეისი
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar, Header, MobileNav, CommandPalette } from '@/components/layout';
 import { KeyboardShortcutsDialog } from '@/components/shared';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import type { User } from '@/types';
 
 interface DashboardShellProps {
@@ -66,7 +67,9 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header user={user} title={pageInfo.title} subtitle={pageInfo.subtitle} />
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="flex-1 p-4 lg:p-6">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
       </div>
 
       {/* Global Components */}

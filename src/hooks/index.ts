@@ -13,3 +13,5 @@ export * from './use-profile';
 export * from './use-trash';
 export * from './use-keyboard-shortcut';
 export * from './use-translations';
+export * from './use-notifications';
+export * from './use-realtime';

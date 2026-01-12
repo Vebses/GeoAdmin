@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ConfirmDialog } from '@/components/ui';
+import { ExportButton } from '@/components/shared/export-button';
 import { InvoiceFilters, type InvoiceFiltersState } from './invoice-list-filters';
 import { InvoiceStatusBadge } from './invoice-status-badge';
 import { InvoiceViewPanel } from './invoice-view-panel';
@@ -35,6 +36,7 @@ import {
 import { useCases } from '@/hooks/use-cases';
 import { usePartners } from '@/hooks/use-partners';
 import { useOurCompanies } from '@/hooks/use-our-companies';
+import { useRealtimeInvoices } from '@/hooks/use-realtime';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { InvoiceWithRelations, InvoiceFormData, InvoiceStatus } from '@/types';
@@ -90,6 +92,9 @@ export function InvoiceList() {
   const deleteMutation = useDeleteInvoice();
   const markPaidMutation = useMarkInvoicePaid();
   const duplicateMutation = useDuplicateInvoice();
+
+  // Enable realtime updates
+  useRealtimeInvoices();
 
   // Compute status counts
   const statusCounts = useMemo(() => {
@@ -187,10 +192,16 @@ export function InvoiceList() {
         <p className="text-xs text-gray-500">
           ინვოისების სია და მართვა
         </p>
-        <Button size="sm" onClick={handleCreate}>
-          <Plus size={14} className="mr-1" />
-          ახალი ინვოისი
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton 
+            entity="invoices" 
+            filters={filters.status ? { status: filters.status } : undefined}
+          />
+          <Button size="sm" onClick={handleCreate}>
+            <Plus size={14} className="mr-1" />
+            ახალი ინვოისი
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

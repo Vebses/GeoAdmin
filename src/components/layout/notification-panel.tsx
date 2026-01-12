@@ -1,46 +1,31 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Bell, FileText, Receipt, Check, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { ka } from 'date-fns/locale';
+import { Bell, FileText, Receipt, Check, X, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useNotifications } from '@/hooks/use-notifications';
 
 interface NotificationPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  userId?: string;
 }
 
-// Mock notifications - will be replaced with real data
-const mockNotifications = [
-  {
-    id: '1',
-    title: 'ახალი ქეისი',
-    message: 'მარიამმა შექმნა ახალი ქეისი GEO-2026-0142',
-    time: '5 წუთის წინ',
-    isRead: false,
-    type: 'case',
-  },
-  {
-    id: '2',
-    title: 'ინვოისი გაიგზავნა',
-    message: 'INV-202601-0022 გაიგზავნა Allianz Partners-ზე',
-    time: '1 საათის წინ',
-    isRead: false,
-    type: 'invoice',
-  },
-  {
-    id: '3',
-    title: 'ქეისი დასრულდა',
-    message: 'ანამ დაასრულა ქეისი GEO-2026-0141',
-    time: '3 საათის წინ',
-    isRead: true,
-    type: 'case',
-  },
-];
-
-export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
+export function NotificationPanel({ isOpen, onClose, userId }: NotificationPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { 
+    notifications, 
+    unreadCount, 
+    isLoading, 
+    markOneAsRead, 
+    markAllAsRead 
+  } = useNotifications(userId);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -60,16 +45,49 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
   if (!isOpen) return null;
 
-  const unreadCount = mockNotifications.filter((n) => !n.isRead).length;
-
   const getIcon = (type: string) => {
     switch (type) {
-      case 'case':
+      case 'case_assigned':
+      case 'case_completed':
         return FileText;
-      case 'invoice':
+      case 'invoice_paid':
         return Receipt;
       default:
         return Bell;
+    }
+  };
+
+  const getIconColors = (type: string) => {
+    switch (type) {
+      case 'case_assigned':
+        return { bg: 'bg-blue-100', text: 'text-blue-600' };
+      case 'case_completed':
+        return { bg: 'bg-green-100', text: 'text-green-600' };
+      case 'invoice_paid':
+        return { bg: 'bg-emerald-100', text: 'text-emerald-600' };
+      default:
+        return { bg: 'bg-gray-100', text: 'text-gray-600' };
+    }
+  };
+
+  const formatTime = (dateStr: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateStr), {
+        addSuffix: true,
+        locale: ka,
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleNotificationClick = (notification: typeof notifications[0]) => {
+    if (!notification.is_read) {
+      markOneAsRead(notification.id);
+    }
+    if (notification.link) {
+      router.push(notification.link);
+      onClose();
     }
   };
 
@@ -77,7 +95,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     <div
       ref={panelRef}
       className={cn(
-        'absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-gray-100 shadow-xl',
+        'absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-gray-100 shadow-xl z-50',
         'animate-in fade-in-0 zoom-in-95 slide-in-from-top-2'
       )}
     >
@@ -99,50 +117,51 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
       {/* Notifications List */}
       <ScrollArea className="max-h-80">
         <div className="divide-y divide-gray-50">
-          {mockNotifications.length === 0 ? (
+          {isLoading ? (
+            <div className="py-8 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="py-8 text-center">
-              <Bell className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+              <CheckCircle className="mx-auto h-8 w-8 text-gray-300 mb-2" />
               <p className="text-sm text-gray-500">შეტყობინებები არ არის</p>
             </div>
           ) : (
-            mockNotifications.map((notification) => {
+            notifications.map((notification) => {
               const Icon = getIcon(notification.type);
+              const colors = getIconColors(notification.type);
               return (
                 <div
                   key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
                   className={cn(
                     'px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors',
-                    !notification.isRead && 'bg-blue-50/50'
+                    !notification.is_read && 'bg-blue-50/50'
                   )}
                 >
                   <div className="flex gap-3">
                     <div
                       className={cn(
                         'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-                        notification.type === 'case' && 'bg-blue-100',
-                        notification.type === 'invoice' && 'bg-emerald-100'
+                        colors.bg
                       )}
                     >
-                      <Icon
-                        size={14}
-                        className={cn(
-                          notification.type === 'case' && 'text-blue-600',
-                          notification.type === 'invoice' && 'text-emerald-600'
-                        )}
-                      />
+                      <Icon size={14} className={colors.text} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-900">
                         {notification.title}
                       </p>
-                      <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">
-                        {notification.message}
-                      </p>
+                      {notification.message && (
+                        <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">
+                          {notification.message}
+                        </p>
+                      )}
                       <p className="text-[10px] text-gray-400 mt-1">
-                        {notification.time}
+                        {formatTime(notification.created_at)}
                       </p>
                     </div>
-                    {!notification.isRead && (
+                    {!notification.is_read && (
                       <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-1" />
                     )}
                   </div>
@@ -154,9 +173,14 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
       </ScrollArea>
 
       {/* Footer */}
-      {mockNotifications.length > 0 && (
+      {notifications.length > 0 && unreadCount > 0 && (
         <div className="px-4 py-2 border-t border-gray-100">
-          <Button variant="ghost" size="sm" className="w-full text-xs">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full text-xs"
+            onClick={() => markAllAsRead()}
+          >
             <Check size={12} className="mr-1" />
             ყველას წაკითხულად მონიშვნა
           </Button>

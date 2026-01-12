@@ -11,6 +11,7 @@ import {
 } from '@/components/dashboard';
 import type { Period } from '@/components/dashboard';
 import { useDashboardStats, useDashboardCharts, useDashboardActivity } from '@/hooks/use-dashboard';
+import { useRealtimeDashboard } from '@/hooks/use-realtime';
 
 export default function DashboardPage() {
   // Load period from localStorage or default to 'month'
@@ -32,6 +33,9 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useDashboardStats(period);
   const { data: charts, isLoading: chartsLoading } = useDashboardCharts(period);
   const { data: activities, isLoading: activityLoading, refetch: refetchActivity } = useDashboardActivity(10);
+
+  // Enable realtime updates
+  useRealtimeDashboard();
 
   return (
     <div className="p-6 space-y-6">
