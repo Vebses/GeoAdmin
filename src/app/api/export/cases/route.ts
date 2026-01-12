@@ -18,27 +18,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build query
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        status,
-        patient_name,
-        patient_id,
-        patient_birth_date,
-        is_medical,
-        is_documented,
-        opened_at,
-        closed_at,
-        total_service_cost,
-        total_assistance_cost,
-        created_at,
-        client:partners!cases_client_id_fkey(name),
-        insurance:partners!cases_insurance_id_fkey(name),
-        assignee:users!cases_assigned_to_fkey(full_name)
-      `)
+    // Build query - simpler without relations to avoid type issues
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase.from('cases') as any)
+      .select('*')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -51,29 +34,61 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Export cases error:', error);
       return NextResponse.json(
-        { success: false, error: { code: 'EXPORT_FAILED', message: 'Failed to export cases' } },
+        { success: false, error: { code: 'EXPORT_FAILED', message: error.message } },
         { status: 500 }
       );
     }
 
+    if (!cases || cases.length === 0) {
+      if (format === 'json') {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      return new NextResponse('No data to export', { status: 204 });
+    }
+
+    // Fetch related data separately
+    const clientIds = Array.from(new Set(cases.map((c: { client_id: string }) => c.client_id).filter(Boolean)));
+    const insuranceIds = Array.from(new Set(cases.map((c: { insurance_id: string }) => c.insurance_id).filter(Boolean)));
+    const assigneeIds = Array.from(new Set(cases.map((c: { assigned_to: string }) => c.assigned_to).filter(Boolean)));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: clients } = clientIds.length > 0 
+      ? await (supabase.from('partners') as any).select('id, name').in('id', clientIds)
+      : { data: [] };
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: insurances } = insuranceIds.length > 0
+      ? await (supabase.from('partners') as any).select('id, name').in('id', insuranceIds)
+      : { data: [] };
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: users } = assigneeIds.length > 0
+      ? await (supabase.from('users') as any).select('id, full_name').in('id', assigneeIds)
+      : { data: [] };
+
+    // Create lookup maps
+    const clientMap = new Map((clients || []).map((c: { id: string; name: string }) => [c.id, c.name]));
+    const insuranceMap = new Map((insurances || []).map((i: { id: string; name: string }) => [i.id, i.name]));
+    const userMap = new Map((users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]));
+
     // Transform data for export
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exportData = (cases || []).map((c: any) => ({
-      'Case Number': c.case_number,
-      'Status': c.status,
-      'Patient Name': c.patient_name,
-      'Patient ID': c.patient_id || '',
-      'Birth Date': c.patient_birth_date || '',
-      'Client': c.client?.name || '',
-      'Insurance': c.insurance?.name || '',
-      'Assigned To': c.assignee?.full_name || '',
-      'Medical': c.is_medical ? 'Yes' : 'No',
-      'Documented': c.is_documented ? 'Yes' : 'No',
-      'Opened': c.opened_at ? new Date(c.opened_at).toLocaleDateString() : '',
-      'Closed': c.closed_at ? new Date(c.closed_at).toLocaleDateString() : '',
-      'Service Cost (GEL)': c.total_service_cost?.toFixed(2) || '0.00',
-      'Assistance Cost (EUR)': c.total_assistance_cost?.toFixed(2) || '0.00',
-      'Created': new Date(c.created_at).toLocaleString(),
+    const exportData = cases.map((c: any) => ({
+      'ქეისის ნომერი': c.case_number || '',
+      'სტატუსი': c.status || '',
+      'პაციენტი': c.patient_name || '',
+      'პაციენტის ID': c.patient_id || '',
+      'დაბადების თარიღი': c.patient_birth_date || '',
+      'კლიენტი': clientMap.get(c.client_id) || '',
+      'დაზღვევა': insuranceMap.get(c.insurance_id) || '',
+      'პასუხისმგებელი': userMap.get(c.assigned_to) || '',
+      'სამედიცინო': c.is_medical ? 'დიახ' : 'არა',
+      'დოკუმენტირებული': c.is_documented ? 'დიახ' : 'არა',
+      'გახსნის თარიღი': c.opened_at ? new Date(c.opened_at).toLocaleDateString('ka-GE') : '',
+      'დახურვის თარიღი': c.closed_at ? new Date(c.closed_at).toLocaleDateString('ka-GE') : '',
+      'მომსახურების ღირებულება': c.total_service_cost?.toFixed(2) || '0.00',
+      'ასისტანსის ღირებულება': c.total_assistance_cost?.toFixed(2) || '0.00',
+      'შექმნის თარიღი': c.created_at ? new Date(c.created_at).toLocaleString('ka-GE') : '',
     }));
 
     if (format === 'json') {
@@ -81,17 +96,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate CSV
-    if (exportData.length === 0) {
-      return new NextResponse('No data to export', { status: 204 });
-    }
-
     const headers = Object.keys(exportData[0]);
     const csvRows = [
       headers.join(','),
-      ...exportData.map(row => 
+      ...exportData.map((row: Record<string, string>) => 
         headers.map(h => {
-          const val = String(row[h as keyof typeof row] || '');
-          // Escape quotes and wrap in quotes if contains comma
+          const val = String(row[h] || '');
           if (val.includes(',') || val.includes('"') || val.includes('\n')) {
             return `"${val.replace(/"/g, '""')}"`;
           }
@@ -99,7 +109,7 @@ export async function GET(request: NextRequest) {
         }).join(',')
       ),
     ];
-    const csvContent = csvRows.join('\n');
+    const csvContent = '\uFEFF' + csvRows.join('\n'); // BOM for Excel UTF-8
 
     const filename = `cases_${new Date().toISOString().split('T')[0]}.csv`;
 
@@ -112,7 +122,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Export cases error:', error);
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to export cases' } },
+      { success: false, error: { code: 'SERVER_ERROR', message: String(error) } },
       { status: 500 }
     );
   }

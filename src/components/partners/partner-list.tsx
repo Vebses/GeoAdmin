@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Building2, MoreVertical, Pencil, Trash2, ExternalLink, Mail, Phone } from 'lucide-react';
+import { Plus, Building2, MoreVertical, Pencil, Trash2, ExternalLink, Mail, Phone, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +14,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PartnerFilters } from './partner-filters';
 import { PartnerEditPanel } from './partner-edit-panel';
+import { PartnerImportDialog } from './partner-import-dialog';
 import {
   usePartners,
   useCreatePartner,
   useUpdatePartner,
   useDeletePartner,
 } from '@/hooks/use-partners';
+import { useCategories } from '@/hooks/use-categories';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { Partner, PartnerFormData, PartnerWithRelations } from '@/types';
 
@@ -30,6 +32,7 @@ export function PartnerList() {
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [deletePartner, setDeletePartner] = useState<Partner | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -39,6 +42,8 @@ export function PartnerList() {
     page,
     limit: 20,
   });
+
+  const { data: categories = [] } = useCategories();
 
   const createMutation = useCreatePartner();
   const updateMutation = useUpdatePartner();
@@ -106,10 +111,16 @@ export function PartnerList() {
           categoryId={categoryId}
           onCategoryChange={setCategoryId}
         />
-        <Button size="sm" onClick={handleCreate}>
-          <Plus size={14} className="mr-1" />
-          ახალი პარტნიორი
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)}>
+            <Upload size={14} className="mr-1" />
+            იმპორტი
+          </Button>
+          <Button size="sm" onClick={handleCreate}>
+            <Plus size={14} className="mr-1" />
+            ახალი პარტნიორი
+          </Button>
+        </div>
       </div>
 
       {/* Partners List */}
@@ -199,6 +210,13 @@ export function PartnerList() {
         cancelText="გაუქმება"
         variant="destructive"
         loading={deleteMutation.isPending}
+      />
+
+      {/* Import Dialog */}
+      <PartnerImportDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        categories={categories}
       />
     </div>
   );
