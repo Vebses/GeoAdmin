@@ -158,12 +158,12 @@ export function PreferencesForm({ user, companies }: PreferencesFormProps) {
               name="default_company_id"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value || 'none'} onValueChange={(val) => field.onChange(val === 'none' ? '' : val)}>
                   <SelectTrigger className="h-10">
                     <SelectValue placeholder="აირჩიეთ კომპანია" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">არცერთი</SelectItem>
+                    <SelectItem value="none">არცერთი</SelectItem>
                     {companies.map(company => (
                       <SelectItem key={company.id} value={company.id}>
                         {company.name}

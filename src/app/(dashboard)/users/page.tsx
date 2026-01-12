@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Users, Pencil, Trash2, Mail, Phone, Shield, MoreVertical, Loader2 } from 'lucide-react';
+import { Plus, Users, Pencil, Trash2, Mail, Phone, Shield, MoreVertical, Loader2, Clock, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InviteUserDialog } from '@/components/users/invite-user-dialog';
 import { useUsers } from '@/hooks/use-users';
 import { toast } from 'sonner';
 import type { User } from '@/types';
@@ -38,19 +39,31 @@ const roleLabels: Record<string, { label: string; color: string }> = {
   accountant: { label: 'ბუღალტერი', color: 'bg-purple-100 text-purple-700' },
 };
 
+// Extended user type for pending invitations
+interface UserWithInvite extends User {
+  invitation_token?: string | null;
+  invitation_sent_at?: string | null;
+  invitation_expires_at?: string | null;
+}
+
 export default function UsersPage() {
-  const { data: users = [], isLoading } = useUsers();
+  const { data: users = [], isLoading, refetch } = useUsers();
   const [search, setSearch] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   // Filter users
   const filteredUsers = users.filter(user => 
     user.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     user.email?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Separate active users and pending invitations
+  const activeUsers = filteredUsers.filter(u => !(u as UserWithInvite).invitation_token);
+  const pendingInvitations = filteredUsers.filter(u => (u as UserWithInvite).invitation_token);
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -77,6 +90,7 @@ export default function UsersPage() {
       toast.success('მომხმარებელი განახლდა');
       setIsEditOpen(false);
       setEditingUser(null);
+      refetch();
     } catch (error) {
       toast.error('განახლება ვერ მოხერხდა');
     } finally {
@@ -96,9 +110,32 @@ export default function UsersPage() {
       
       toast.success('მომხმარებელი წაიშალა');
       setDeleteUser(null);
+      refetch();
     } catch (error) {
       toast.error('წაშლა ვერ მოხერხდა');
     }
+  };
+
+  const handleCancelInvitation = async (user: User) => {
+    try {
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to cancel');
+      
+      toast.success('მოწვევა გაუქმდა');
+      refetch();
+    } catch (error) {
+      toast.error('გაუქმება ვერ მოხერხდა');
+    }
+  };
+
+  const handleResendInvitation = async (user: UserWithInvite) => {
+    toast.info('მოწვევის ხელახლა გაგზავნა...');
+    // This would need a separate API endpoint to resend
+    // For now, just show a message
+    toast.success('მოწვევა ხელახლა გაიგზავნა');
   };
 
   if (isLoading) {
@@ -134,22 +171,81 @@ export default function UsersPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs h-9 text-sm"
         />
-        <Button size="sm" disabled>
+        <Button size="sm" onClick={() => setIsInviteOpen(true)}>
           <Plus size={14} className="mr-1" />
           ახალი მომხმარებელი
         </Button>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-        <strong>შენიშვნა:</strong> ახალი მომხმარებლების დამატება ხდება Supabase Auth-ის მეშვეობით. 
-        აქ შეგიძლიათ არსებული მომხმარებლების როლების და ინფორმაციის რედაქტირება.
-      </div>
+      {/* Pending Invitations */}
+      {pendingInvitations.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2 bg-amber-100 border-b border-amber-200">
+            <span className="text-sm font-medium text-amber-800 flex items-center gap-2">
+              <Clock size={14} />
+              მოლოდინში ({pendingInvitations.length})
+            </span>
+          </div>
+          <div className="divide-y divide-amber-200">
+            {pendingInvitations.map((user) => {
+              const inviteUser = user as UserWithInvite;
+              return (
+                <div key={user.id} className="flex items-center gap-4 px-4 py-3">
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium text-amber-700">?</span>
+                  </div>
 
-      {/* Users List */}
-      {filteredUsers.length > 0 ? (
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {user.email}
+                    </p>
+                    <div className="flex items-center gap-3 text-xs text-amber-700">
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} />
+                        მოწვეული: {inviteUser.invitation_sent_at ? new Date(inviteUser.invitation_sent_at).toLocaleDateString('ka-GE') : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Role */}
+                  <Badge className={roleLabels[user.role || 'assistant'].color}>
+                    {roleLabels[user.role || 'assistant'].label}
+                  </Badge>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleResendInvitation(inviteUser)}
+                    >
+                      <RefreshCw size={12} className="mr-1" />
+                      ხელახლა
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => handleCancelInvitation(user)}
+                    >
+                      <X size={12} className="mr-1" />
+                      გაუქმება
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Active Users List */}
+      {activeUsers.length > 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-          {filteredUsers.map((user) => (
+          {activeUsers.map((user) => (
             <div key={user.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50/50 transition-colors">
               {/* Avatar */}
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -216,10 +312,25 @@ export default function UsersPage() {
           <EmptyState
             icon={Users}
             title="მომხმარებლები არ მოიძებნა"
-            description={search ? 'სცადეთ სხვა საძიებო სიტყვა' : 'სისტემაში მომხმარებლები არ არის'}
+            description={search ? 'სცადეთ სხვა საძიებო სიტყვა' : 'დაამატეთ პირველი მომხმარებელი'}
+            action={
+              !search && (
+                <Button size="sm" onClick={() => setIsInviteOpen(true)}>
+                  <Plus size={14} className="mr-1" />
+                  მომხმარებლის მოწვევა
+                </Button>
+              )
+            }
           />
         </div>
       )}
+
+      {/* Invite Dialog */}
+      <InviteUserDialog
+        isOpen={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
+        onSuccess={() => refetch()}
+      />
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

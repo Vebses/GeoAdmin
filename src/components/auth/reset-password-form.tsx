@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
-import { createClient } from '@/lib/supabase/client';
 
 const resetPasswordSchema = z
   .object({
@@ -30,12 +29,16 @@ type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [isValidSession, setIsValidSession] = useState<boolean | null>(null);
+  const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
 
   const {
     register,
@@ -45,31 +48,54 @@ export function ResetPasswordForm() {
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  // Check if we have a valid reset session
+  // Validate token on mount
   useEffect(() => {
-    const checkSession = async () => {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // The user will have a session if they clicked the reset link
-      setIsValidSession(!!session);
+    const validateToken = async () => {
+      if (!token) {
+        setIsValidToken(false);
+        setIsValidating(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth/validate-reset-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+
+        const result = await response.json();
+        setIsValidToken(result.valid);
+      } catch {
+        setIsValidToken(false);
+      } finally {
+        setIsValidating(false);
+      }
     };
 
-    checkSession();
-  }, []);
+    validateToken();
+  }, [token]);
 
   const onSubmit = async (data: ResetPasswordFormData) => {
+    if (!token) return;
+    
     setIsLoading(true);
     setError(null);
 
     try {
-      const supabase = createClient();
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: data.password,
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          password: data.password,
+        }),
       });
 
-      if (updateError) {
-        throw updateError;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'პაროლის შეცვლა ვერ მოხერხდა');
       }
 
       setSuccess(true);
@@ -85,8 +111,8 @@ export function ResetPasswordForm() {
     }
   };
 
-  // Loading state while checking session
-  if (isValidSession === null) {
+  // Loading state while validating token
+  if (isValidating) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -95,7 +121,7 @@ export function ResetPasswordForm() {
   }
 
   // Invalid or expired link
-  if (!isValidSession) {
+  if (!isValidToken) {
     return (
       <div className="text-center">
         <div className="rounded-lg bg-red-50 p-4">

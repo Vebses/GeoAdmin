@@ -15,3 +15,4 @@ export * from './use-keyboard-shortcut';
 export * from './use-translations';
 export * from './use-notifications';
 export * from './use-realtime';
+export * from './use-sidebar-counts';

@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { mainNavItems, bottomNavItems, isNavItem, filterNavByRole, type NavEntry } from '@/lib/config/navigation';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { useSidebarCounts } from '@/hooks/use-sidebar-counts';
 import type { User } from '@/types';
 
 interface SidebarProps {
@@ -17,10 +18,18 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { data: counts } = useSidebarCounts();
   
   const userRole = user?.role || 'assistant';
   const filteredMainItems = filterNavByRole(mainNavItems, userRole);
   const filteredBottomItems = filterNavByRole(bottomNavItems, userRole);
+
+  // Map counts to navigation items
+  const badgeCounts: Record<string, number> = {
+    '/cases': counts?.activeCases || 0,
+    '/invoices': counts?.unpaidInvoices || 0,
+    '/trash': counts?.trashedItems || 0,
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -57,6 +66,7 @@ export function Sidebar({ user }: SidebarProps) {
                 item={item}
                 pathname={pathname}
                 collapsed={sidebarCollapsed}
+                badgeCounts={badgeCounts}
               />
             ))}
           </nav>
@@ -70,6 +80,7 @@ export function Sidebar({ user }: SidebarProps) {
               item={item}
               pathname={pathname}
               collapsed={sidebarCollapsed}
+              badgeCounts={badgeCounts}
             />
           ))}
         </div>
@@ -102,15 +113,17 @@ interface NavItemComponentProps {
   item: NavEntry;
   pathname: string;
   collapsed: boolean;
+  badgeCounts: Record<string, number>;
 }
 
-function NavItemComponent({ item, pathname, collapsed }: NavItemComponentProps) {
+function NavItemComponent({ item, pathname, collapsed, badgeCounts }: NavItemComponentProps) {
   if (!isNavItem(item)) {
     return <div className="my-2 h-px bg-gray-100" />;
   }
 
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
   const Icon = item.icon;
+  const count = badgeCounts[item.href] || 0;
 
   const content = (
     <Link
@@ -133,7 +146,7 @@ function NavItemComponent({ item, pathname, collapsed }: NavItemComponentProps) 
       {!collapsed && (
         <>
           <span className="flex-1">{item.name}</span>
-          {item.badge && (
+          {item.badge && count > 0 && (
             <span
               className={cn(
                 'px-1.5 py-0.5 text-[10px] font-medium rounded-full',
@@ -143,10 +156,7 @@ function NavItemComponent({ item, pathname, collapsed }: NavItemComponentProps) 
                 item.badge.variant === 'muted' && 'bg-gray-200 text-gray-600'
               )}
             >
-              {/* Badge count would come from a store/context */}
-              {item.badge.variant === 'primary' && '3'}
-              {item.badge.variant === 'warning' && '2'}
-              {item.badge.variant === 'muted' && '1'}
+              {count > 99 ? '99+' : count}
             </span>
           )}
         </>
