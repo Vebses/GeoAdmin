@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { Sidebar, Header, MobileNav } from '@/components/layout';
+import { Sidebar, Header, MobileNav, CommandPalette } from '@/components/layout';
+import { KeyboardShortcutsDialog } from '@/components/shared';
 import type { User } from '@/types';
 
 interface DashboardShellProps {
@@ -67,6 +68,10 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         <Header user={user} title={pageInfo.title} subtitle={pageInfo.subtitle} />
         <main className="flex-1 p-4 lg:p-6">{children}</main>
       </div>
+
+      {/* Global Components */}
+      <CommandPalette />
+      <KeyboardShortcutsDialog />
     </div>
   );
 }
