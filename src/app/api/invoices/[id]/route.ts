@@ -136,13 +136,13 @@ export async function PUT(request: Request, context: RouteContext) {
         .delete()
         .eq('invoice_id', id);
 
-      // Insert new services
+      // Insert new services (map to correct DB column names)
       const servicesInsertData = services.map((service: { description: string; quantity?: number; unit_price: number; total: number }, index: number) => ({
         invoice_id: id,
-        description: service.description,
+        name: service.description,      // DB column is 'name', form field is 'description'
         quantity: service.quantity || 1,
         unit_price: service.unit_price,
-        total: service.total,
+        amount: service.total,          // DB column is 'amount', form field is 'total'
         sort_order: index,
       }));
 

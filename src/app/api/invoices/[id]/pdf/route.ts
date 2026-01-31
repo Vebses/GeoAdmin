@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const download = searchParams.get('download') === 'true';
     const regenerate = searchParams.get('regenerate') === 'true';
 
-    // Get invoice with all relations
+    // Get invoice with all relations (exclude soft-deleted)
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select(`
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         services:invoice_services(*)
       `)
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (invoiceError || !invoice) {

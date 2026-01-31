@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Get invoice with all relations
+    // Get invoice with all relations (exclude soft-deleted)
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select(`
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         sends:invoice_sends(*)
       `)
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (invoiceError || !invoice) {
