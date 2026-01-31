@@ -193,10 +193,13 @@ export const ourCompanySchema = z.object({
 export const caseSchema = z.object({
   case_number: z
     .string()
-    .min(3, 'ქეისის ნომერი უნდა იყოს მინიმუმ 3 სიმბოლო')
     .max(20, 'ქეისის ნომერი ძალიან გრძელია')
-    .regex(/^[A-Z0-9-]+$/, 'მხოლოდ დიდი ასოები, ციფრები და ტირე')
-    .optional(),
+    .refine(
+      (val) => !val || val.length === 0 || (val.length >= 3 && /^[A-Z0-9-]+$/.test(val)),
+      'ქეისის ნომერი უნდა იყოს მინიმუმ 3 სიმბოლო (მხოლოდ დიდი ასოები, ციფრები და ტირე)'
+    )
+    .optional()
+    .or(z.literal('')),
   status: z.enum(['draft', 'in_progress', 'paused', 'delayed', 'completed', 'cancelled']),
   patient_name: z
     .string()

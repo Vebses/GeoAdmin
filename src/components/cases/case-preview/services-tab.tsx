@@ -118,14 +118,14 @@ function CostDisplay({
   );
 }
 
-// Total item display
+// Total item display - shows currency breakdown
 function TotalItem({
   label,
-  value,
+  totals,
   color
 }: {
   label: string;
-  value: number;
+  totals: { GEL: number; USD: number; EUR: number };
   color: 'blue' | 'emerald' | 'purple';
 }) {
   const colorClasses = {
@@ -134,12 +134,27 @@ function TotalItem({
     purple: 'text-purple-600'
   };
 
+  // Get non-zero currencies
+  const currencies = (['GEL', 'USD', 'EUR'] as const).filter(c => totals[c] > 0);
+
   return (
     <div className="text-right">
       <p className="text-[10px] text-gray-400 uppercase">{label}</p>
-      <p className={`text-sm font-bold ${colorClasses[color]}`}>
-        {formatCurrency(value, 'GEL')}
-      </p>
+      <div className={`text-sm font-bold ${colorClasses[color]}`}>
+        {currencies.length === 0 ? (
+          <span>0</span>
+        ) : currencies.length === 1 ? (
+          <span>{formatCurrency(totals[currencies[0]], currencies[0])}</span>
+        ) : (
+          <div className="space-y-0.5">
+            {currencies.map(c => (
+              <div key={c} className="text-xs">
+                {formatCurrency(totals[c], c)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -217,6 +232,21 @@ export function ServicesTab({ caseData }: ServicesTabProps) {
     return <EmptyState />;
   }
 
+  // Calculate totals by currency
+  const serviceTotals = { GEL: 0, USD: 0, EUR: 0 };
+  const assistanceTotals = { GEL: 0, USD: 0, EUR: 0 };
+  const commissionTotals = { GEL: 0, USD: 0, EUR: 0 };
+
+  actions.forEach(action => {
+    const serviceCurrency = (action.service_currency as 'GEL' | 'USD' | 'EUR') || 'GEL';
+    const assistanceCurrency = (action.assistance_currency as 'GEL' | 'USD' | 'EUR') || 'GEL';
+    const commissionCurrency = (action.commission_currency as 'GEL' | 'USD' | 'EUR') || 'GEL';
+
+    serviceTotals[serviceCurrency] += action.service_cost || 0;
+    assistanceTotals[assistanceCurrency] += action.assistance_cost || 0;
+    commissionTotals[commissionCurrency] += action.commission_cost || 0;
+  });
+
   return (
     <div className="space-y-4">
       {/* Services list */}
@@ -232,17 +262,17 @@ export function ServicesTab({ caseData }: ServicesTabProps) {
         <div className="flex items-center gap-8">
           <TotalItem
             label="სერვისი"
-            value={caseData.total_service_cost || 0}
+            totals={serviceTotals}
             color="blue"
           />
           <TotalItem
             label="ასისტანსი"
-            value={caseData.total_assistance_cost || 0}
+            totals={assistanceTotals}
             color="emerald"
           />
           <TotalItem
             label="საკომისიო"
-            value={caseData.total_commission_cost || 0}
+            totals={commissionTotals}
             color="purple"
           />
         </div>

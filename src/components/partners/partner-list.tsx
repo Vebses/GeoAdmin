@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Building2, MoreVertical, Pencil, Trash2, ExternalLink, Mail, Phone, Upload } from 'lucide-react';
+import { Plus, Building2, MoreVertical, Pencil, Trash2, ExternalLink, Mail, Phone, Upload, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import {
 import { PartnerFilters } from './partner-filters';
 import { PartnerEditPanel } from './partner-edit-panel';
 import { PartnerImportDialog } from './partner-import-dialog';
+import { PartnerViewModal } from './partner-view-modal';
 import {
   usePartners,
   useCreatePartner,
@@ -33,6 +34,7 @@ export function PartnerList() {
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [deletePartner, setDeletePartner] = useState<Partner | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [viewingPartner, setViewingPartner] = useState<PartnerWithRelations | null>(null);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -57,7 +59,17 @@ export function PartnerList() {
     setIsEditPanelOpen(true);
   };
 
+  const handleView = (partner: PartnerWithRelations) => {
+    setViewingPartner(partner);
+  };
+
   const handleEdit = (partner: Partner) => {
+    setEditingPartner(partner);
+    setIsEditPanelOpen(true);
+  };
+
+  const handleEditFromView = (partner: PartnerWithRelations) => {
+    setViewingPartner(null);
     setEditingPartner(partner);
     setIsEditPanelOpen(true);
   };
@@ -130,6 +142,7 @@ export function PartnerList() {
             <PartnerRow
               key={partner.id}
               partner={partner as PartnerWithRelations}
+              onView={handleView}
               onEdit={handleEdit}
               onDelete={setDeletePartner}
             />
@@ -218,19 +231,31 @@ export function PartnerList() {
         onClose={() => setIsImportOpen(false)}
         categories={categories}
       />
+
+      {/* View Modal */}
+      <PartnerViewModal
+        partner={viewingPartner}
+        isOpen={!!viewingPartner}
+        onClose={() => setViewingPartner(null)}
+        onEdit={handleEditFromView}
+      />
     </div>
   );
 }
 
 interface PartnerRowProps {
   partner: PartnerWithRelations;
+  onView: (partner: PartnerWithRelations) => void;
   onEdit: (partner: Partner) => void;
   onDelete: (partner: Partner) => void;
 }
 
-function PartnerRow({ partner, onEdit, onDelete }: PartnerRowProps) {
+function PartnerRow({ partner, onView, onEdit, onDelete }: PartnerRowProps) {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50/50 transition-colors group">
+    <div
+      className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50/50 transition-colors group cursor-pointer"
+      onClick={() => onView(partner)}
+    >
       {/* Icon/Avatar */}
       <div
         className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -306,7 +331,7 @@ function PartnerRow({ partner, onEdit, onDelete }: PartnerRowProps) {
 
       {/* Actions */}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -316,6 +341,10 @@ function PartnerRow({ partner, onEdit, onDelete }: PartnerRowProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onView(partner)}>
+            <Eye size={14} className="mr-2" />
+            ნახვა
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onEdit(partner)}>
             <Pencil size={14} className="mr-2" />
             რედაქტირება

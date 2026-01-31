@@ -56,7 +56,7 @@ export function InvoiceViewPanel({
     description: (s as any).name || s.description || '',
     quantity: s.quantity,
     unit_price: s.unit_price,
-    total: s.total,
+    total: (s as any).amount || s.total || (s.quantity * s.unit_price),  // DB stores 'amount', form uses 'total'
   }));
 
   const languageLabel = invoice.language === 'ka' ? 'ქართული' : 'English';

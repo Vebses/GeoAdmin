@@ -214,33 +214,29 @@ export function InvoicesTab({ caseData }: InvoicesTabProps) {
   const [loading, setLoading] = useState(!caseData.invoices);
 
   useEffect(() => {
-    // If invoices are already loaded, use them
-    if (caseData.invoices) {
+    // If invoices are already loaded with data, use them
+    if (caseData.invoices && caseData.invoices.length > 0) {
       setInvoices(caseData.invoices);
       setLoading(false);
       return;
     }
 
-    // Fetch invoices if not loaded but count > 0
-    if (caseData.invoices_count && caseData.invoices_count > 0) {
-      setLoading(true);
-      fetch(`/api/invoices?case_id=${caseData.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success && data.data) {
-            setInvoices(data.data);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to load invoices:', err);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
-  }, [caseData.id, caseData.invoices, caseData.invoices_count]);
+    // Always try to fetch invoices for this case (don't rely on count which may be stale)
+    setLoading(true);
+    fetch(`/api/invoices?case_id=${caseData.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setInvoices(data.data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load invoices:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [caseData.id, caseData.invoices]);
 
   if (loading) {
     return <LoadingState />;

@@ -2,7 +2,7 @@
 
 import { Send, CheckCircle, XCircle, Clock, Mail, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { formatDate } from '@/lib/utils/format';
+import { formatDateTime } from '@/lib/utils/format';
 import type { InvoiceSend } from '@/types';
 
 interface InvoiceSendHistoryProps {
@@ -56,7 +56,7 @@ export function InvoiceSendHistory({ sends, className }: InvoiceSendHistoryProps
                   )}
                 </div>
                 <span className="text-[10px] text-gray-400">
-                  {formatDate(send.created_at)}
+                  {formatDateTime(send.sent_at)}
                 </span>
               </div>
 
@@ -90,7 +90,7 @@ export function InvoiceSendHistory({ sends, className }: InvoiceSendHistoryProps
               {/* Opened indicator */}
               {send.opened_at && (
                 <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-green-600">
-                  გახსნილია: {formatDate(send.opened_at)}
+                  გახსნილია: {formatDateTime(send.opened_at)}
                 </div>
               )}
             </div>

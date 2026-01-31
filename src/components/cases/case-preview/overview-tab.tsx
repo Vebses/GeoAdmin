@@ -71,15 +71,15 @@ function DataRow({
   );
 }
 
-// Stat card component
-function StatCard({
+// Multi-currency stat card component
+function MultiCurrencyStatCard({
   label,
-  value,
+  totals,
   color,
   highlight = false
 }: {
   label: string;
-  value: string;
+  totals: { GEL: number; USD: number; EUR: number };
   color: 'blue' | 'emerald' | 'purple' | 'gray';
   highlight?: boolean;
 }) {
@@ -90,9 +90,26 @@ function StatCard({
     gray: highlight ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
   };
 
+  const currencies = (['GEL', 'USD', 'EUR'] as const).filter(c => totals[c] > 0);
+  const hasValue = currencies.length > 0;
+
   return (
     <div className={`p-4 rounded-xl text-center transition-transform hover:scale-[1.02] ${colorClasses[color]}`}>
-      <p className="text-xl font-bold">{value}</p>
+      <div className="font-bold">
+        {!hasValue ? (
+          <span className="text-xl">0</span>
+        ) : currencies.length === 1 ? (
+          <span className="text-xl">{formatCurrency(totals[currencies[0]], currencies[0])}</span>
+        ) : (
+          <div className="space-y-0.5">
+            {currencies.map(c => (
+              <div key={c} className="text-sm">
+                {formatCurrency(totals[c], c)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <p className={`text-[10px] mt-1 ${color === 'gray' && highlight ? 'text-gray-400' : 'opacity-70'}`}>
         {label}
       </p>
@@ -123,9 +140,38 @@ function CountBadge({
 }
 
 export function OverviewTab({ caseData }: OverviewTabProps) {
-  const totalCost = (caseData.total_service_cost || 0) +
-    (caseData.total_assistance_cost || 0) +
-    (caseData.total_commission_cost || 0);
+  // Calculate multi-currency totals from actions
+  const serviceTotals = { GEL: 0, USD: 0, EUR: 0 };
+  const assistanceTotals = { GEL: 0, USD: 0, EUR: 0 };
+  const commissionTotals = { GEL: 0, USD: 0, EUR: 0 };
+  const grandTotals = { GEL: 0, USD: 0, EUR: 0 };
+
+  if (caseData.actions && caseData.actions.length > 0) {
+    caseData.actions.forEach(action => {
+      // Service costs
+      const serviceCurrency = (action.service_currency || 'GEL') as 'GEL' | 'USD' | 'EUR';
+      serviceTotals[serviceCurrency] += action.service_cost || 0;
+      grandTotals[serviceCurrency] += action.service_cost || 0;
+
+      // Assistance costs
+      const assistanceCurrency = (action.assistance_currency || 'GEL') as 'GEL' | 'USD' | 'EUR';
+      assistanceTotals[assistanceCurrency] += action.assistance_cost || 0;
+      grandTotals[assistanceCurrency] += action.assistance_cost || 0;
+
+      // Commission costs
+      const commissionCurrency = (action.commission_currency || 'GEL') as 'GEL' | 'USD' | 'EUR';
+      commissionTotals[commissionCurrency] += action.commission_cost || 0;
+      grandTotals[commissionCurrency] += action.commission_cost || 0;
+    });
+  } else {
+    // Fallback to case totals (assume GEL for backwards compatibility)
+    serviceTotals.GEL = caseData.total_service_cost || 0;
+    assistanceTotals.GEL = caseData.total_assistance_cost || 0;
+    commissionTotals.GEL = caseData.total_commission_cost || 0;
+    grandTotals.GEL = (caseData.total_service_cost || 0) +
+      (caseData.total_assistance_cost || 0) +
+      (caseData.total_commission_cost || 0);
+  }
 
   return (
     <div className="space-y-6">
@@ -238,24 +284,24 @@ export function OverviewTab({ caseData }: OverviewTabProps) {
       <div>
         <h3 className="text-xs font-semibold text-gray-900 mb-3">ფინანსური შეჯამება</h3>
         <div className="grid grid-cols-4 gap-3">
-          <StatCard
+          <MultiCurrencyStatCard
             label="სერვისი"
-            value={formatCurrency(caseData.total_service_cost || 0, 'GEL')}
+            totals={serviceTotals}
             color="blue"
           />
-          <StatCard
+          <MultiCurrencyStatCard
             label="ასისტანსი"
-            value={formatCurrency(caseData.total_assistance_cost || 0, 'GEL')}
+            totals={assistanceTotals}
             color="emerald"
           />
-          <StatCard
+          <MultiCurrencyStatCard
             label="საკომისიო"
-            value={formatCurrency(caseData.total_commission_cost || 0, 'GEL')}
+            totals={commissionTotals}
             color="purple"
           />
-          <StatCard
+          <MultiCurrencyStatCard
             label="სულ"
-            value={formatCurrency(totalCost, 'GEL')}
+            totals={grandTotals}
             color="gray"
             highlight
           />

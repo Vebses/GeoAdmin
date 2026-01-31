@@ -126,6 +126,7 @@ export function CaseEditPanel({
       } else {
         // New case - for assistants, auto-assign to themselves
         reset({
+          case_number: '', // Empty = auto-generate
           status: 'draft',
           priority: 'normal',
           patient_name: '',
@@ -173,16 +174,27 @@ export function CaseEditPanel({
           {/* Tab 1: Case Details */}
           <TabsContent value="details" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              {isEdit && (
-                <div className="space-y-1.5">
-                  <Label>ქეისის ნომერი</Label>
+              <div className="space-y-1.5">
+                <Label>ქეისის ნომერი {!isEdit && <span className="text-gray-400 font-normal">(ოპციონალური)</span>}</Label>
+                {isEdit ? (
                   <Input
                     value={caseData?.case_number || ''}
                     disabled
                     className="bg-gray-50"
                   />
-                </div>
-              )}
+                ) : (
+                  <>
+                    <Input
+                      {...register('case_number')}
+                      placeholder="ავტომატურად შეივსება"
+                      className="placeholder:text-gray-400"
+                    />
+                    <p className="text-[10px] text-gray-500">
+                      ცარიელი დატოვეთ ავტომატური გენერაციისთვის (GEO-YYYY-0001)
+                    </p>
+                  </>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <Label>სტატუსი</Label>
                 <Controller

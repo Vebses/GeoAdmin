@@ -167,16 +167,43 @@ export async function POST(request: Request) {
       assignedTo = user.id;
     }
 
-    // Generate case number atomically using database function
-    const { data: caseNumberData, error: caseNumberError } = await supabase
-      .rpc('generate_case_number');
+    // Use provided case number or generate one atomically
+    let caseNumber = caseData.case_number?.trim();
 
-    if (caseNumberError) {
-      console.error('Failed to generate case number:', caseNumberError);
-      throw new Error('Failed to generate case number');
+    if (!caseNumber) {
+      // Generate case number atomically using database function
+      const { data: caseNumberData, error: caseNumberError } = await supabase
+        .rpc('generate_case_number');
+
+      if (caseNumberError) {
+        console.error('Failed to generate case number:', caseNumberError);
+        throw new Error('Failed to generate case number');
+      }
+
+      caseNumber = caseNumberData as string;
+    } else {
+      // Check if provided case number already exists
+      const { data: existingCase } = await supabase
+        .from('cases')
+        .select('id')
+        .eq('case_number', caseNumber)
+        .is('deleted_at', null)
+        .single();
+
+      if (existingCase) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'DUPLICATE_CASE_NUMBER',
+              message: 'ქეისის ნომერი უკვე გამოყენებულია',
+              details: { case_number: ['ეს ქეისის ნომერი უკვე არსებობს'] }
+            }
+          },
+          { status: 400 }
+        );
+      }
     }
-
-    const caseNumber = caseNumberData as string;
 
     // Build insert object
     const insertData = {
