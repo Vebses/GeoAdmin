@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
         sender:our_companies!invoices_sender_id_fkey(id, name, legal_name),
         recipient:partners!invoices_recipient_id_fkey(id, name, legal_name, email),
         creator:users!invoices_created_by_fkey(id, full_name),
-        services:invoice_services(*)
+        services:invoice_services(*),
+        sends:invoice_sends(id, sent_at, email, status, is_resend)
       `, { count: 'exact' })
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
