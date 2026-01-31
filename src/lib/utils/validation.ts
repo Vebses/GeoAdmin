@@ -12,7 +12,10 @@ const phoneValidation = z
   .or(z.literal(''))
   .refine(
     (val) => {
-      if (!val || val === '') return true; // Optional field
+      // Explicit check for all falsy values and non-strings
+      if (val === undefined || val === null || val === '' || typeof val !== 'string') {
+        return true; // Optional field - allow empty
+      }
       const parsed = parsePhoneNumber(val);
       if (!parsed) return false;
       return validatePhoneDigits(parsed.countryCode, parsed.digits);

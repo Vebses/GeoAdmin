@@ -277,8 +277,9 @@ export const COUNTRY_OPTIONS: CountryCode[] = [
  * @param fullPhone - Full phone string like "+995 555 12 34 56"
  * @returns Object with countryCode and digits, or null if parsing fails
  */
-export function parsePhoneNumber(fullPhone: string): { countryCode: CountryCode; digits: string } | null {
-  if (!fullPhone) return null;
+export function parsePhoneNumber(fullPhone: string | null | undefined): { countryCode: CountryCode; digits: string } | null {
+  // Explicit type check - handle undefined/null/non-string safely
+  if (!fullPhone || typeof fullPhone !== 'string') return null;
 
   // Clean the phone number
   const cleaned = fullPhone.replace(/\s/g, '');
