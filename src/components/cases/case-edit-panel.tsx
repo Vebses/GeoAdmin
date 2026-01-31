@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { CaseActionsEditor } from './case-actions-editor';
 import { CaseDocuments } from './case-documents';
 import { caseSchema, type CaseFormData } from '@/lib/utils/validation';
@@ -401,10 +402,17 @@ export function CaseEditPanel({
               </div>
               <div className="space-y-1.5">
                 <Label>ტელეფონი</Label>
-                <Input
-                  {...register('patient_phone')}
-                  placeholder="+995 5XX XXX XXX"
-                  error={!!errors.patient_phone}
+                <Controller
+                  name="patient_phone"
+                  control={control}
+                  render={({ field }) => (
+                    <PhoneInput
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      error={!!errors.patient_phone}
+                      disabled={loading}
+                    />
+                  )}
                 />
                 {errors.patient_phone && (
                   <p className="text-xs text-red-500">{errors.patient_phone.message}</p>

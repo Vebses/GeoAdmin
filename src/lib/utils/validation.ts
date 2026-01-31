@@ -1,4 +1,24 @@
 import { z } from 'zod';
+import { parsePhoneNumber, validatePhoneDigits } from './phone-config';
+
+/**
+ * Phone validation helper - validates international phone numbers
+ * Accepts format like "+995 555 12 34 56" or "+49 151 12345678"
+ */
+const phoneValidation = z
+  .string()
+  .optional()
+  .nullable()
+  .or(z.literal(''))
+  .refine(
+    (val) => {
+      if (!val || val === '') return true; // Optional field
+      const parsed = parsePhoneNumber(val);
+      if (!parsed) return false;
+      return validatePhoneDigits(parsed.countryCode, parsed.digits);
+    },
+    { message: 'არასწორი ტელეფონის ნომერი' }
+  );
 
 // ============================================
 // AUTH SCHEMAS
@@ -64,12 +84,7 @@ export const userProfileSchema = z.object({
     .string()
     .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
     .max(100, 'სახელი ძალიან გრძელია'),
-  phone: z
-    .string()
-    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
-    .optional()
-    .nullable()
-    .or(z.literal('')),
+  phone: phoneValidation,
 });
 
 export const createUserSchema = z.object({
@@ -80,12 +95,7 @@ export const createUserSchema = z.object({
     .max(100, 'სახელი ძალიან გრძელია'),
   role: z.enum(['super_admin', 'manager', 'assistant', 'accountant']),
   is_active: z.boolean().default(true),
-  phone: z
-    .string()
-    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
-    .optional()
-    .nullable()
-    .or(z.literal('')),
+  phone: phoneValidation,
   password: z
     .string()
     .min(8, 'პაროლი უნდა იყოს მინიმუმ 8 სიმბოლო')
@@ -197,12 +207,7 @@ export const caseSchema = z.object({
     .nullable()
     .or(z.literal('')),
   patient_dob: z.coerce.date().max(new Date(), 'დაბადების თარიღი არ შეიძლება იყოს მომავალში').optional().nullable(),
-  patient_phone: z
-    .string()
-    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ნომერი')
-    .optional()
-    .nullable()
-    .or(z.literal('')),
+  patient_phone: phoneValidation,
   patient_email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
   client_id: z.string().uuid().optional().nullable(),
   insurance_id: z.string().uuid().optional().nullable(),

@@ -1,5 +1,6 @@
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns';
 import { ka, enUS } from 'date-fns/locale';
+import { parsePhoneNumber, formatFullPhoneNumber } from './phone-config';
 
 export type CurrencyCode = 'GEL' | 'USD' | 'EUR';
 export type Locale = 'ka' | 'en';
@@ -95,18 +96,19 @@ export function formatCurrency(
 }
 
 /**
- * Format phone number
+ * Format phone number - supports international formats
+ * Automatically detects country from dial code and formats accordingly
  */
 export function formatPhone(phone: string | null | undefined): string {
   if (!phone) return '-';
 
-  // Georgian phone format: +995 XXX XX XX XX
-  const cleaned = phone.replace(/\D/g, '');
-
-  if (cleaned.startsWith('995') && cleaned.length === 12) {
-    return `+995 ${cleaned.slice(3, 6)} ${cleaned.slice(6, 8)} ${cleaned.slice(8, 10)} ${cleaned.slice(10)}`;
+  // Try to parse and format with country-specific formatting
+  const parsed = parsePhoneNumber(phone);
+  if (parsed) {
+    return formatFullPhoneNumber(parsed.countryCode, parsed.digits);
   }
 
+  // Fallback: return as-is if we can't parse it
   return phone;
 }
 
