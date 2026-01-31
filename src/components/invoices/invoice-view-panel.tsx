@@ -53,7 +53,7 @@ export function InvoiceViewPanel({
   if (!isOpen || !invoice) return null;
 
   const services: InvoiceServiceFormData[] = (invoice.services || []).map((s) => ({
-    description: s.description,
+    description: (s as any).name || s.description || '',
     quantity: s.quantity,
     unit_price: s.unit_price,
     total: s.total,
