@@ -3,15 +3,23 @@ import { createClient } from '@/lib/supabase/server';
 
 const ADMIN_ROLES = ['super_admin', 'manager', 'admin'];
 
+interface CasesByStatus {
+  draft: number;
+  in_progress: number;
+  paused: number;
+  delayed: number;
+  completed: number;
+}
+
 interface TeamMember {
   id: string;
   name: string;
   avatar: string | null;
   role: string;
-  assigned: number;
-  completed: number;
+  totalCases: number;
+  casesByStatus: CasesByStatus;
+  completedInPeriod: number;
   avgDays: number | null;
-  rate: number;
 }
 
 interface TeamResponse {
@@ -85,19 +93,40 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get case stats for each user
+    // Get case stats for each user with status breakdown
     const members: TeamMember[] = await Promise.all(
       users.map(async (u) => {
-        // Assigned cases (current active)
-        const { count: assigned } = await supabase
-          .from('cases')
-          .select('*', { count: 'exact', head: true })
-          .is('deleted_at', null)
-          .eq('assigned_to', u.id)
-          .in('status', ['draft', 'in_progress', 'paused', 'delayed']);
+        // Get cases by status
+        const statuses = ['draft', 'in_progress', 'paused', 'delayed', 'completed'] as const;
+        const casesByStatus: CasesByStatus = {
+          draft: 0,
+          in_progress: 0,
+          paused: 0,
+          delayed: 0,
+          completed: 0,
+        };
 
-        // Completed cases in period
-        const { count: completed } = await supabase
+        // Fetch counts for each status in parallel
+        const statusCounts = await Promise.all(
+          statuses.map(async (status) => {
+            const { count } = await supabase
+              .from('cases')
+              .select('*', { count: 'exact', head: true })
+              .is('deleted_at', null)
+              .eq('assigned_to', u.id)
+              .eq('status', status);
+            return { status, count: count || 0 };
+          })
+        );
+
+        statusCounts.forEach(({ status, count }) => {
+          casesByStatus[status] = count;
+        });
+
+        const totalCases = Object.values(casesByStatus).reduce((a, b) => a + b, 0);
+
+        // Completed cases in selected period
+        const { count: completedInPeriod } = await supabase
           .from('cases')
           .select('*', { count: 'exact', head: true })
           .is('deleted_at', null)
@@ -128,25 +157,21 @@ export async function GET(request: NextRequest) {
           avgDays = Math.round((totalDays / completedCases.length) * 10) / 10;
         }
 
-        // Completion rate (completed / (assigned + completed) * 100)
-        const totalHandled = (assigned || 0) + (completed || 0);
-        const rate = totalHandled > 0 ? Math.round(((completed || 0) / totalHandled) * 100) : 0;
-
         return {
           id: u.id,
           name: u.full_name || 'უცნობი',
           avatar: u.avatar_url,
           role: u.role,
-          assigned: assigned || 0,
-          completed: completed || 0,
+          totalCases,
+          casesByStatus,
+          completedInPeriod: completedInPeriod || 0,
           avgDays,
-          rate,
         };
       })
     );
 
-    // Sort by completion rate descending
-    members.sort((a, b) => b.rate - a.rate);
+    // Sort by total cases descending
+    members.sort((a, b) => b.totalCases - a.totalCases);
 
     return NextResponse.json({
       success: true,

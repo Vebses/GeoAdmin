@@ -45,15 +45,23 @@ export interface ActivityItem {
   message: string;
 }
 
+export interface CasesByStatus {
+  draft: number;
+  in_progress: number;
+  paused: number;
+  delayed: number;
+  completed: number;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   avatar: string | null;
   role: string;
-  assigned: number;
-  completed: number;
+  totalCases: number;
+  casesByStatus: CasesByStatus;
+  completedInPeriod: number;
   avgDays: number | null;
-  rate: number;
 }
 
 // Enhanced stats types

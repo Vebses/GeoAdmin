@@ -9,7 +9,7 @@ import {
   StatusBreakdown,
   RecentActivity,
   AlertsPanel,
-  TeamPerformance,
+  TeamWorkload,
   FinancialStats,
 } from '@/components/dashboard';
 import type { Period } from '@/components/dashboard';
@@ -99,9 +99,9 @@ export default function DashboardPage() {
         <AlertsPanel alerts={alerts} loading={alertsLoading} />
       )}
 
-      {/* Team Performance - Only for admin/manager */}
+      {/* Team Workload - Only for admin/manager */}
       {canSeeTeam && (
-        <TeamPerformance members={teamData?.members} loading={teamLoading} />
+        <TeamWorkload members={teamData?.members} loading={teamLoading} />
       )}
 
       {/* Activity Section */}
