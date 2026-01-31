@@ -20,11 +20,15 @@ export function useAuth() {
   });
 
   const fetchUser = useCallback(async () => {
+    console.log('[useAuth] fetchUser called');
     try {
       const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+      console.log('[useAuth] getUser result:', { authUser: authUser?.id, authError });
 
       if (!authUser) {
+        console.log('[useAuth] No auth user, setting isLoading: false');
         setState({
           user: null,
           isLoading: false,
@@ -34,21 +38,24 @@ export function useAuth() {
       }
 
       // Fetch user profile
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
         .single();
 
+      console.log('[useAuth] Profile result:', { profile: profileData, profileError });
+
       const userProfile = profileData as User | null;
 
+      console.log('[useAuth] Setting state with user:', userProfile?.role);
       setState({
         user: userProfile,
         isLoading: false,
         isAuthenticated: !!userProfile,
       });
     } catch (error) {
-      console.error('Error fetching user:', error);
+      console.error('[useAuth] Error fetching user:', error);
       setState({
         user: null,
         isLoading: false,
