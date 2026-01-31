@@ -56,7 +56,7 @@ export function InvoiceSendHistory({ sends, className }: InvoiceSendHistoryProps
                   )}
                 </div>
                 <span className="text-[10px] text-gray-400">
-                  {formatDateTime(send.sent_at)}
+                  {formatDateTime((send as any).sent_at || send.created_at)}
                 </span>
               </div>
 
