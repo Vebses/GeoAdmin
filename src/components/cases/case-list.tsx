@@ -30,7 +30,7 @@ const ITEMS_PER_PAGE = 10;
 
 export function CaseList() {
   const { user: currentUser } = useAuth();
-  const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+  const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isAssistant = currentUser?.role === 'assistant';
 
   // Panel states

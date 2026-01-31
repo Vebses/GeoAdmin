@@ -14,7 +14,7 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
-          role: 'manager' | 'assistant' | 'accountant' | 'admin';
+          role: 'manager' | 'assistant' | 'accountant' | 'admin' | 'super_admin';
           is_active: boolean;
           avatar_url: string | null;
           phone: string | null;
@@ -744,7 +744,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
-      user_role: 'manager' | 'assistant' | 'accountant' | 'admin';
+      user_role: 'manager' | 'assistant' | 'accountant' | 'admin' | 'super_admin';
       case_status: 'draft' | 'in_progress' | 'paused' | 'delayed' | 'completed' | 'cancelled';
       invoice_status: 'draft' | 'unpaid' | 'paid' | 'cancelled';
       currency_code: 'GEL' | 'USD' | 'EUR';
