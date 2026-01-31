@@ -3,20 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { ROLE_LABELS } from '@/lib/constants/roles';
 import type { TeamMember } from '@/hooks/use-dashboard';
 
 interface TeamWorkloadProps {
   members: TeamMember[] | undefined;
   loading?: boolean;
 }
-
-const roleLabels: Record<string, string> = {
-  super_admin: 'სუპერ ადმინი',
-  manager: 'მენეჯერი',
-  admin: 'ადმინი',
-  assistant: 'ასისტანტი',
-  accountant: 'ბუღალტერი',
-};
 
 const statusConfig = {
   draft: { color: 'bg-gray-400', label: 'დრაფტი' },
@@ -120,7 +113,7 @@ export function TeamWorkload({ members, loading }: TeamWorkloadProps) {
                         {member.name}
                       </p>
                       <p className="text-xs text-gray-400">
-                        {roleLabels[member.role] || member.role}
+                        {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] || member.role}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0 ml-3">

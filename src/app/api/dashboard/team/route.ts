@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-
-const ADMIN_ROLES = ['super_admin', 'manager', 'admin'];
+import { canViewTeam } from '@/lib/constants/roles';
 
 interface CasesByStatus {
   draft: number;
@@ -66,7 +65,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     const userRoleData = userData as UserRoleRow | null;
-    if (!userRoleData || !ADMIN_ROLES.includes(userRoleData.role)) {
+    if (!userRoleData || !canViewTeam(userRoleData.role)) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } },
         { status: 403 }

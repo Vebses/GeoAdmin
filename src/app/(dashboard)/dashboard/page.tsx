@@ -23,10 +23,7 @@ import {
 } from '@/hooks/use-dashboard';
 import { useRealtimeDashboard } from '@/hooks/use-realtime';
 import { useAuth } from '@/hooks/use-auth';
-
-// Roles that can see financial stats and team performance
-const ADMIN_ROLES = ['super_admin', 'manager', 'admin'];
-const FINANCIAL_ROLES = ['super_admin', 'manager', 'admin', 'accountant'];
+import { canViewTeam, canViewFinancial } from '@/lib/constants/roles';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -46,9 +43,9 @@ export default function DashboardPage() {
     localStorage.setItem('dashboard_period', newPeriod);
   };
 
-  // Role checks
-  const canSeeFinancial = user?.role && FINANCIAL_ROLES.includes(user.role);
-  const canSeeTeam = user?.role && ADMIN_ROLES.includes(user.role);
+  // Role checks - uses centralized role constants from @/lib/constants/roles
+  const canSeeFinancial = canViewFinancial(user?.role);
+  const canSeeTeam = canViewTeam(user?.role);
 
   // Fetch data
   const { data: stats, isLoading: statsLoading } = useDashboardStats(period);

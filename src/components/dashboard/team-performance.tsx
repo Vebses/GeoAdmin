@@ -2,20 +2,13 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { ROLE_LABELS } from '@/lib/constants/roles';
 import type { TeamMember } from '@/hooks/use-dashboard';
 
 interface TeamPerformanceProps {
   members: TeamMember[] | undefined;
   loading?: boolean;
 }
-
-const roleLabels: Record<string, string> = {
-  super_admin: 'სუპერ ადმინი',
-  manager: 'მენეჯერი',
-  admin: 'ადმინი',
-  assistant: 'ასისტანტი',
-  accountant: 'ბუღალტერი',
-};
 
 function getInitials(name: string): string {
   return name
@@ -111,7 +104,7 @@ export function TeamPerformance({ members, loading }: TeamPerformanceProps) {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
                   <p className="text-xs text-gray-400 truncate">
-                    {roleLabels[member.role] || member.role}
+                    {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] || member.role}
                   </p>
                 </div>
               </div>
