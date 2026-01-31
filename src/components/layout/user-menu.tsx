@@ -18,6 +18,7 @@ interface UserMenuProps {
 }
 
 const roleLabels: Record<string, string> = {
+  super_admin: 'სუპერ ადმინი',
   manager: 'მენეჯერი',
   assistant: 'ასისტენტი',
   accountant: 'ბუღალტერი',
@@ -79,7 +80,7 @@ export function UserMenu({ user }: UserMenuProps) {
           <UserIcon className="mr-2 h-4 w-4" />
           <span>პროფილი</span>
         </DropdownMenuItem>
-        {user?.role === 'manager' && (
+        {(user?.role === 'super_admin' || user?.role === 'manager') && (
           <DropdownMenuItem onClick={() => router.push('/settings')}>
             <Settings className="mr-2 h-4 w-4" />
             <span>პარამეტრები</span>

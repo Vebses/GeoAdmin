@@ -81,7 +81,7 @@ export const mainNavItems: NavEntry[] = [
     nameEn: 'Users',
     href: '/users',
     icon: Users,
-    roles: ['manager'],
+    roles: ['super_admin', 'manager'],
   },
 ];
 
@@ -96,14 +96,14 @@ export const bottomNavItems: NavEntry[] = [
       key: 'trash_count',
       variant: 'muted',
     },
-    roles: ['manager'],
+    roles: ['super_admin', 'manager'],
   },
   {
     name: 'პარამეტრები',
     nameEn: 'Settings',
     href: '/settings',
     icon: Settings,
-    roles: ['manager'],
+    roles: ['super_admin', 'manager'],
   },
 ];
 

@@ -73,7 +73,7 @@ export function CaseFilters({
 
   const hasActiveFilters = filters.status || filters.assigned_to || filters.client_id || filters.search;
 
-  const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager');
+  const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager' || u.role === 'super_admin');
 
   return (
     <div className="space-y-3">
