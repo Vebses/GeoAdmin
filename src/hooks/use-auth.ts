@@ -11,9 +11,6 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-// Timeout duration for auth operations (5 seconds)
-const AUTH_TIMEOUT = 5000;
-
 export function useAuth() {
   const router = useRouter();
   const [state, setState] = useState<AuthState>({
@@ -22,81 +19,77 @@ export function useAuth() {
     isAuthenticated: false,
   });
 
-  const fetchUser = useCallback(async () => {
-    console.log('[useAuth] fetchUser called');
+  // Fetch user profile from database using auth user ID
+  const fetchUserProfile = useCallback(async (authUserId: string) => {
     try {
       const supabase = createClient();
-
-      // Add timeout to prevent infinite hanging
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Auth timeout')), AUTH_TIMEOUT)
-      );
-
-      const authPromise = supabase.auth.getUser();
-
-      const { data: { user: authUser }, error: authError } = await Promise.race([
-        authPromise,
-        timeoutPromise
-      ]) as Awaited<typeof authPromise>;
-
-      console.log('[useAuth] getUser result:', { authUser: authUser?.id, authError });
-
-      if (authError || !authUser) {
-        console.log('[useAuth] No auth user or error, setting isLoading: false');
-        setState({
-          user: null,
-          isLoading: false,
-          isAuthenticated: false,
-        });
-        return;
-      }
-
-      // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', authUser.id)
+        .eq('id', authUserId)
         .single();
 
-      console.log('[useAuth] Profile result:', { profile: profileData, profileError });
+      if (profileError || !profileData) {
+        console.error('[useAuth] Profile fetch error:', profileError);
+        setState({ user: null, isLoading: false, isAuthenticated: false });
+        return;
+      }
 
-      const userProfile = profileData as User | null;
-
-      console.log('[useAuth] Setting state with user:', userProfile?.role);
+      const userProfile = profileData as User;
+      console.log('[useAuth] Profile loaded:', userProfile.role);
       setState({
         user: userProfile,
         isLoading: false,
-        isAuthenticated: !!userProfile,
+        isAuthenticated: true,
       });
     } catch (error) {
-      console.error('[useAuth] Error fetching user:', error);
-      setState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
+      console.error('[useAuth] Error fetching profile:', error);
+      setState({ user: null, isLoading: false, isAuthenticated: false });
     }
   }, []);
 
   useEffect(() => {
-    fetchUser();
-
-    // Subscribe to auth changes
     const supabase = createClient();
+
+    // Initial session check using getSession() instead of getUser()
+    const initializeAuth = async () => {
+      try {
+        console.log('[useAuth] Initializing auth with getSession()');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        console.log('[useAuth] getSession result:', { hasSession: !!session, userId: session?.user?.id, error });
+
+        if (error || !session?.user) {
+          console.log('[useAuth] No session, setting unauthenticated');
+          setState({ user: null, isLoading: false, isAuthenticated: false });
+          return;
+        }
+
+        // Use session.user.id to fetch profile
+        await fetchUserProfile(session.user.id);
+      } catch (error) {
+        console.error('[useAuth] Init error:', error);
+        setState({ user: null, isLoading: false, isAuthenticated: false });
+      }
+    };
+
+    initializeAuth();
+
+    // Subscribe to auth changes - use session directly
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[useAuth] Auth state changed:', event);
-        if (event === 'SIGNED_IN' && session) {
-          await fetchUser();
+      (event, session) => {
+        console.log('[useAuth] Auth state changed:', event, session?.user?.id);
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Use session.user.id directly - don't call getUser()!
+          fetchUserProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
-          setState({
-            user: null,
-            isLoading: false,
-            isAuthenticated: false,
-          });
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Re-fetch user on token refresh to ensure state is current
-          await fetchUser();
+          setState({ user: null, isLoading: false, isAuthenticated: false });
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          fetchUserProfile(session.user.id);
+        } else if (event === 'INITIAL_SESSION' && session?.user) {
+          // Handle initial session event
+          fetchUserProfile(session.user.id);
         }
       }
     );
@@ -104,7 +97,7 @@ export function useAuth() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [fetchUser]);
+  }, [fetchUserProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await fetch('/api/auth/login', {
@@ -119,23 +112,17 @@ export function useAuth() {
       throw new Error(result.error || 'შესვლა ვერ მოხერხდა');
     }
 
-    await fetchUser();
+    // Auth state change will trigger profile fetch automatically
     router.push('/dashboard');
     router.refresh();
 
     return result;
-  }, [fetchUser, router]);
+  }, [router]);
 
   const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-
-      setState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-
+      setState({ user: null, isLoading: false, isAuthenticated: false });
       router.push('/login');
       router.refresh();
     } catch (error) {
@@ -145,8 +132,12 @@ export function useAuth() {
   }, [router]);
 
   const refreshUser = useCallback(async () => {
-    await fetchUser();
-  }, [fetchUser]);
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await fetchUserProfile(session.user.id);
+    }
+  }, [fetchUserProfile]);
 
   return {
     ...state,
