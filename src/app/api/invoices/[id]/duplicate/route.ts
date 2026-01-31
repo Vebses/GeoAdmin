@@ -13,9 +13,7 @@ interface InvoiceData {
   recipient_id: string;
   currency: string;
   subtotal: number;
-  franchise_amount: number;
-  franchise_type: string;
-  franchise_value: number;
+  franchise: number;
   total: number;
   language: string;
   email_subject: string | null;
@@ -26,10 +24,10 @@ interface InvoiceData {
   attach_original_docs: boolean;
   attach_medical_docs: boolean;
   services: Array<{
-    description: string;
+    name: string;
     quantity: number;
     unit_price: number;
-    total: number;
+    amount: number;
     sort_order: number;
   }>;
 }
@@ -68,34 +66,16 @@ export async function POST(request: Request, context: RouteContext) {
 
     const invoice = originalInvoice as unknown as InvoiceData;
 
-    // Get sender company for prefix
-    const { data: senderCompanyData } = await supabase
-      .from('our_companies')
-      .select('invoice_prefix')
-      .eq('id', invoice.sender_id)
-      .single();
+    // Generate invoice number atomically using database function
+    const { data: invoiceNumberData, error: invoiceNumberError } = await supabase
+      .rpc('generate_invoice_number', { company_id: invoice.sender_id } as never);
 
-    const senderCompany = senderCompanyData as { invoice_prefix: string | null } | null;
-    const prefix = senderCompany?.invoice_prefix || 'INV';
-
-    // Generate new invoice number
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const { data: lastInvoiceData } = await supabase
-      .from('invoices')
-      .select('invoice_number')
-      .like('invoice_number', `${prefix}-${year}${month}-%`)
-      .order('invoice_number', { ascending: false })
-      .limit(1)
-      .single();
-
-    const lastInvoice = lastInvoiceData as { invoice_number: string } | null;
-    let nextNumber = 1;
-    if (lastInvoice?.invoice_number) {
-      const parts = lastInvoice.invoice_number.split('-');
-      nextNumber = parseInt(parts[2]) + 1;
+    if (invoiceNumberError) {
+      console.error('Failed to generate invoice number:', invoiceNumberError);
+      throw new Error('Failed to generate invoice number');
     }
-    const newInvoiceNumber = `${prefix}-${year}${month}-${String(nextNumber).padStart(4, '0')}`;
+
+    const newInvoiceNumber = invoiceNumberData as string;
 
     // Create duplicate invoice
     const duplicateData = {
@@ -106,9 +86,7 @@ export async function POST(request: Request, context: RouteContext) {
       status: 'draft' as const,
       currency: invoice.currency,
       subtotal: invoice.subtotal,
-      franchise_amount: invoice.franchise_amount,
-      franchise_type: invoice.franchise_type,
-      franchise_value: invoice.franchise_value,
+      franchise: invoice.franchise,
       total: invoice.total,
       language: invoice.language,
       email_subject: invoice.email_subject,
@@ -136,10 +114,10 @@ export async function POST(request: Request, context: RouteContext) {
     if (invoice.services && invoice.services.length > 0) {
       const servicesData = invoice.services.map((service, index) => ({
         invoice_id: newInvoiceId,
-        description: service.description,
+        name: service.name,
         quantity: service.quantity,
         unit_price: service.unit_price,
-        total: service.total,
+        amount: service.amount,
         sort_order: index,
       }));
 
