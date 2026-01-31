@@ -11,6 +11,9 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+// Timeout duration for auth operations (5 seconds)
+const AUTH_TIMEOUT = 5000;
+
 export function useAuth() {
   const router = useRouter();
   const [state, setState] = useState<AuthState>({
@@ -23,12 +26,23 @@ export function useAuth() {
     console.log('[useAuth] fetchUser called');
     try {
       const supabase = createClient();
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+      // Add timeout to prevent infinite hanging
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Auth timeout')), AUTH_TIMEOUT)
+      );
+
+      const authPromise = supabase.auth.getUser();
+
+      const { data: { user: authUser }, error: authError } = await Promise.race([
+        authPromise,
+        timeoutPromise
+      ]) as Awaited<typeof authPromise>;
 
       console.log('[useAuth] getUser result:', { authUser: authUser?.id, authError });
 
-      if (!authUser) {
-        console.log('[useAuth] No auth user, setting isLoading: false');
+      if (authError || !authUser) {
+        console.log('[useAuth] No auth user or error, setting isLoading: false');
         setState({
           user: null,
           isLoading: false,
@@ -71,6 +85,7 @@ export function useAuth() {
     const supabase = createClient();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[useAuth] Auth state changed:', event);
         if (event === 'SIGNED_IN' && session) {
           await fetchUser();
         } else if (event === 'SIGNED_OUT') {
@@ -79,6 +94,9 @@ export function useAuth() {
             isLoading: false,
             isAuthenticated: false,
           });
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Re-fetch user on token refresh to ensure state is current
+          await fetchUser();
         }
       }
     );
@@ -111,13 +129,13 @@ export function useAuth() {
   const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      
+
       setState({
         user: null,
         isLoading: false,
         isAuthenticated: false,
       });
-      
+
       router.push('/login');
       router.refresh();
     } catch (error) {
