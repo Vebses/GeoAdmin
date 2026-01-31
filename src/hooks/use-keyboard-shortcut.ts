@@ -36,6 +36,7 @@ export function useKeyboardShortcut(
 
     const keysArray = Array.isArray(keys) ? keys : [keys];
     const pressed = formatKeyEvent(event);
+    if (!pressed) return; // Guard against undefined event.key
 
     if (keysArray.some(k => matchKeys(pressed, k))) {
       if (preventDefault) {
@@ -53,18 +54,19 @@ export function useKeyboardShortcut(
 
 function formatKeyEvent(event: KeyboardEvent): string {
   const parts: string[] = [];
-  
+
   if (event.ctrlKey || event.metaKey) parts.push('mod');
   if (event.altKey) parts.push('alt');
   if (event.shiftKey) parts.push('shift');
-  
-  // Normalize key
+
+  // Normalize key - guard against undefined event.key
+  if (!event.key) return '';
   let key = event.key.toLowerCase();
   if (key === ' ') key = 'space';
   if (key === 'escape') key = 'esc';
-  
+
   parts.push(key);
-  
+
   return parts.join('+');
 }
 
