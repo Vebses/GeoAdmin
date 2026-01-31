@@ -88,7 +88,8 @@ export function TeamWorkload({ members, loading }: TeamWorkloadProps) {
 
       <div className="space-y-4">
         {members.map((member) => {
-          const activeCases = member.totalCases - member.casesByStatus.completed;
+          // Active cases = only in_progress status (not draft, paused, etc.)
+          const activeCases = member.casesByStatus.in_progress;
 
           return (
             <div

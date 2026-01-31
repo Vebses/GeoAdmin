@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, Eye, Edit2, Trash2, Briefcase, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,10 @@ export function CaseList() {
   const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isAssistant = currentUser?.role === 'assistant';
 
+  // Read URL parameters for filtering (e.g., from Team Workload click)
+  const searchParams = useSearchParams();
+  const initialAssignedTo = searchParams.get('assigned_to');
+
   // DEBUG: Remove after fixing
   console.log('[CaseList Debug]', {
     userId: currentUser?.id,
@@ -56,13 +61,20 @@ export function CaseList() {
   // View mode for assistants: 'my' (default) or 'all'
   const [viewMode, setViewMode] = useState<'my' | 'all'>(isAssistant ? 'my' : 'all');
 
-  // Filters
+  // Filters - initialize with URL parameter if present
   const [filters, setFilters] = useState<CaseFiltersState>({
     status: null,
-    assigned_to: null,
+    assigned_to: initialAssignedTo,
     client_id: null,
     search: '',
   });
+
+  // Update filters when URL params change
+  useEffect(() => {
+    if (initialAssignedTo && initialAssignedTo !== filters.assigned_to) {
+      setFilters(prev => ({ ...prev, assigned_to: initialAssignedTo }));
+    }
+  }, [initialAssignedTo]);
   const debouncedSearch = useDebounce(filters.search, 300);
 
   // Pagination
