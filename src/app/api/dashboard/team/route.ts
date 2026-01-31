@@ -30,7 +30,6 @@ interface UserRow {
   full_name: string | null;
   avatar_url: string | null;
   role: string;
-  is_active?: boolean;
 }
 
 interface UserRoleRow {
@@ -77,22 +76,15 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const periodStart = getPeriodStart(now, period);
 
-    // Get all active users who can be assigned cases or work on cases
-    // Include all roles except accountant since they don't work on cases
-    const { data: usersData, error: usersError } = await supabase
+    // Get all users who can work on cases (all roles except accountant)
+    // Show all users even with 0 cases assigned
+    const { data: usersData } = await supabase
       .from('users')
-      .select('id, full_name, avatar_url, role, is_active')
+      .select('id, full_name, avatar_url, role')
       .in('role', ['assistant', 'manager', 'admin', 'super_admin'])
       .order('full_name');
 
     const users = (usersData || []) as UserRow[];
-
-    // Debug log
-    console.log('Team API - Users query result:', {
-      count: users.length,
-      error: usersError,
-      users: users.map(u => ({ name: u.full_name, role: u.role, active: u.is_active }))
-    });
 
     if (users.length === 0) {
       return NextResponse.json({
