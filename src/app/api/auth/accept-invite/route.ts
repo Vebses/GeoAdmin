@@ -169,14 +169,18 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', authData.user.id);
 
-      // Mark invitation as accepted
+      // Mark invitation as accepted (use admin client to bypass RLS)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase
+      const { error: acceptError } = await (adminClient
         .from('user_invitations') as any)
         .update({
           accepted_at: new Date().toISOString(),
         })
         .eq('id', invitation.id);
+
+      if (acceptError) {
+        console.error('Error marking invitation as accepted:', acceptError);
+      }
     }
 
     // NOTIFY MANAGERS that a new user has registered
