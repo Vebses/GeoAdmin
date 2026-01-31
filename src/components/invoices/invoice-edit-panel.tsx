@@ -81,7 +81,8 @@ export function InvoiceEditPanel({
       setSenderId(invoice.sender_id);
       setCurrency(invoice.currency);
       setLanguage(invoice.language);
-      setFranchiseAmount(invoice.franchise_amount || 0);
+      // DB column is 'franchise', type may have 'franchise_amount'
+      setFranchiseAmount((invoice as any).franchise ?? invoice.franchise_amount ?? 0);
       setRecipientEmail(invoice.recipient_email || '');
       setEmailSubject(invoice.email_subject || '');
       setEmailBody(invoice.email_body || '');
@@ -90,12 +91,13 @@ export function InvoiceEditPanel({
       setAttachMedicalDocs(invoice.attach_medical_docs || false);
       setNotes(invoice.notes || '');
       
-      // Convert services
+      // Convert services from DB format to form format
+      // DB uses 'name' and 'amount', form uses 'description' and 'total'
       const invoiceServices = (invoice.services || []).map((s) => ({
-        description: s.description,
+        description: (s as any).name || s.description || '',
         quantity: s.quantity,
         unit_price: s.unit_price,
-        total: s.total,
+        total: (s as any).amount || s.total || 0,
       }));
       setServices(invoiceServices);
     }

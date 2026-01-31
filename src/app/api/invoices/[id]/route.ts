@@ -87,6 +87,16 @@ export async function PUT(request: Request, context: RouteContext) {
       );
     }
 
+    const invoiceStatus = (existingInvoice as { status: string }).status;
+
+    // Prevent editing paid invoices (except notes)
+    if (invoiceStatus === 'paid') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVOICE_PAID', message: 'გადახდილი ინვოისის რედაქტირება შეუძლებელია' } },
+        { status: 400 }
+      );
+    }
+
     // Parse request body
     const body = await request.json();
     const validationResult = invoiceSchema.partial().safeParse(body);

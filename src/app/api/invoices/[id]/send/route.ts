@@ -64,6 +64,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       sends: Array<{ id: string }>;
     };
 
+    // Validate invoice status - cannot send paid or cancelled invoices
+    if (typedInvoice.status === 'paid') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_STATUS', message: 'გადახდილი ინვოისის გაგზავნა შეუძლებელია' } },
+        { status: 400 }
+      );
+    }
+    if (typedInvoice.status === 'cancelled') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_STATUS', message: 'გაუქმებული ინვოისის გაგზავნა შეუძლებელია' } },
+        { status: 400 }
+      );
+    }
+
     // Generate PDF
     const pdfBuffer = await generateInvoicePDF({
       invoice: typedInvoice,

@@ -55,6 +55,7 @@ export async function POST(request: Request, context: RouteContext) {
       status: 'paid' as const,
       paid_at: new Date().toISOString(),
       payment_reference: payment_reference || null,
+      payment_notes: payment_notes || null,
       updated_at: new Date().toISOString(),
     };
 
