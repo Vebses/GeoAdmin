@@ -75,12 +75,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       attachments.push({ name: 'Medical documents', type: 'folder' });
     }
 
+    // Use env variable, fall back to sender's email, then generic fallback
+    const fromEmail = process.env.RESEND_FROM_EMAIL || typedInvoice.sender.email || 'noreply@example.com';
+    const fromName = process.env.RESEND_FROM_NAME || typedInvoice.sender.name;
+
     return NextResponse.json({
       success: true,
       data: {
         from: {
-          email: process.env.RESEND_FROM_EMAIL || 'noreply@geoadmin.ge',
-          name: process.env.RESEND_FROM_NAME || typedInvoice.sender.name,
+          email: fromEmail,
+          name: fromName,
         },
         to: typedInvoice.recipient_email || typedInvoice.recipient.email,
         cc: typedInvoice.cc_emails || [],

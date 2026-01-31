@@ -6,6 +6,20 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+// Valid status transitions
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['unpaid', 'cancelled'],
+  unpaid: ['paid', 'cancelled'],
+  paid: [], // No transitions allowed from paid
+  cancelled: ['draft'], // Can revert to draft
+};
+
+function isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
+  if (currentStatus === newStatus) return true; // No change is always valid
+  const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+  return allowedTransitions.includes(newStatus);
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
@@ -29,7 +43,7 @@ export async function GET(request: Request, context: RouteContext) {
         recipient:partners!invoices_recipient_id_fkey(id, name, legal_name, email),
         creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*),
-        sends:invoice_sends(*)
+        sends:invoice_sends(id, sent_at, email, status, is_resend)
       `)
       .eq('id', id)
       .is('deleted_at', null)
@@ -118,6 +132,22 @@ export async function PUT(request: Request, context: RouteContext) {
     const updateData = validationResult.data;
     const { services, ...invoiceUpdateData } = updateData;
 
+    // Validate status transition if status is being changed
+    if (updateData.status && updateData.status !== invoiceStatus) {
+      if (!isValidStatusTransition(invoiceStatus, updateData.status)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'INVALID_STATUS_TRANSITION',
+              message: `სტატუსის ცვლილება '${invoiceStatus}' → '${updateData.status}' დაუშვებელია`
+            }
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate new totals if services are provided
     let updateObject: Record<string, unknown> = { ...invoiceUpdateData };
     
@@ -173,7 +203,7 @@ export async function PUT(request: Request, context: RouteContext) {
         recipient:partners!invoices_recipient_id_fkey(id, name, legal_name, email),
         creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*),
-        sends:invoice_sends(*)
+        sends:invoice_sends(id, sent_at, email, status, is_resend)
       `)
       .eq('id', id)
       .single();

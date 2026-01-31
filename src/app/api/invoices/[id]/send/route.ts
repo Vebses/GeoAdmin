@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateInvoicePDF } from '@/lib/pdf';
-import { sendInvoiceEmail } from '@/lib/email';
+import { sendInvoiceEmail, isValidEmail } from '@/lib/email';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface RouteParams {
@@ -18,6 +18,12 @@ interface SendRequest {
   attach_patient_docs?: boolean;
   attach_original_docs?: boolean;
   attach_medical_docs?: boolean;
+}
+
+// Validate and filter CC emails
+function validateCCEmails(emails: string[] | undefined | null): string[] {
+  if (!emails || !Array.isArray(emails)) return [];
+  return emails.filter(email => typeof email === 'string' && isValidEmail(email.trim()));
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -104,47 +110,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const shouldAttachOriginalDocs = body.attach_original_docs ?? typedInvoice.attach_original_docs ?? false;
     const shouldAttachMedicalDocs = body.attach_medical_docs ?? typedInvoice.attach_medical_docs ?? false;
 
-    console.log('Invoice attachment settings:', {
-      from_request: {
-        attach_patient_docs: body.attach_patient_docs,
-        attach_original_docs: body.attach_original_docs,
-        attach_medical_docs: body.attach_medical_docs,
-      },
-      from_invoice: {
-        attach_patient_docs: typedInvoice.attach_patient_docs,
-        attach_original_docs: typedInvoice.attach_original_docs,
-        attach_medical_docs: typedInvoice.attach_medical_docs,
-      },
-      resolved: {
-        attach_patient_docs: shouldAttachPatientDocs,
-        attach_original_docs: shouldAttachOriginalDocs,
-        attach_medical_docs: shouldAttachMedicalDocs,
-      },
-      case_id: typedInvoice.case_id,
-    });
+    // Track failed attachments for response metadata
+    const failedAttachments: string[] = [];
 
     // Helper function to fetch document attachments
     const fetchDocumentAttachments = async (caseId: string, docType: string) => {
-      console.log(`Fetching ${docType} documents for case:`, caseId);
-      
       const { data: docs, error } = await supabase
         .from('case_documents')
         .select('*')
         .eq('case_id', caseId)
-        .eq('type', docType);  // Column is 'type', not 'document_type'
+        .eq('type', docType);
 
       if (error) {
         console.error(`Error fetching ${docType} documents:`, error);
+        failedAttachments.push(`${docType}: database error`);
         return;
       }
-
-      console.log(`Found ${docs?.length || 0} ${docType} documents`);
 
       if (docs) {
         for (const doc of docs as Array<{ file_url: string; file_name: string }>) {
           if (doc.file_url) {
             try {
-              console.log(`Fetching document: ${doc.file_name} from ${doc.file_url}`);
               const response = await fetch(doc.file_url);
               if (response.ok) {
                 const buffer = await response.arrayBuffer();
@@ -152,12 +138,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   filename: doc.file_name,
                   content: Buffer.from(buffer),
                 });
-                console.log(`Successfully fetched: ${doc.file_name}`);
               } else {
                 console.warn(`Failed to fetch document (${response.status}): ${doc.file_name}`);
+                failedAttachments.push(doc.file_name);
               }
             } catch (err) {
               console.warn(`Failed to fetch document: ${doc.file_name}`, err);
+              failedAttachments.push(doc.file_name);
             }
           }
         }
@@ -175,7 +162,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await fetchDocumentAttachments(typedInvoice.case_id, 'medical');
     }
 
-    console.log(`Total additional attachments: ${additionalAttachments.length}`);
+    // Validate and filter CC emails
+    const validatedCCEmails = validateCCEmails(body.cc_emails) || validateCCEmails(typedInvoice.cc_emails);
 
     // Send email
     const sendResult = await sendInvoiceEmail({
@@ -185,7 +173,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       caseData: typedInvoice.case,
       pdfBuffer,
       to: recipientEmail,
-      cc: body.cc_emails || typedInvoice.cc_emails || [],
+      cc: validatedCCEmails,
       subject: body.subject,
       body: body.body,
       additionalAttachments,
@@ -198,7 +186,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         invoice_id: id,
         sent_by: user.id,
         email: recipientEmail,
-        cc_emails: body.cc_emails || typedInvoice.cc_emails || [],
+        cc_emails: validatedCCEmails,
         subject: body.subject || typedInvoice.email_subject || '',
         body: body.body || typedInvoice.email_body || '',
         status: 'failed',
@@ -220,7 +208,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         invoice_id: id,
         sent_by: user.id,
         email: recipientEmail,
-        cc_emails: body.cc_emails || typedInvoice.cc_emails || [],
+        cc_emails: validatedCCEmails,
         subject: body.subject || typedInvoice.email_subject || '',
         body: body.body || typedInvoice.email_body || '',
         status: 'sent',
@@ -249,6 +237,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         message_id: sendResult.messageId,
         email: recipientEmail,
         sent_at: new Date().toISOString(),
+        attachments_count: additionalAttachments.length + 1, // +1 for PDF
+        failed_attachments: failedAttachments.length > 0 ? failedAttachments : undefined,
       },
     });
   } catch (error) {

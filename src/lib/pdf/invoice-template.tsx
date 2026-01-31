@@ -69,9 +69,11 @@ function formatCurrency(amount: number, currency: CurrencyCode): string {
   return `${amount.toFixed(2)} ${symbol}`;
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, language: 'en' | 'ka' = 'en'): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-GB', {
+  // Use language-specific locale for consistent formatting with email
+  const locale = language === 'ka' ? 'ka-GE' : 'en-GB';
+  return date.toLocaleDateString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -437,7 +439,7 @@ export function InvoicePDF({
           <View style={styles.invoiceInfo}>
             <Text style={styles.invoiceTitle}>{t.invoice}</Text>
             <Text style={styles.invoiceNumber}>#{invoice.invoice_number}</Text>
-            <Text style={styles.invoiceMeta}>{t.date}: {formatDate(invoice.created_at)}</Text>
+            <Text style={styles.invoiceMeta}>{t.date}: {formatDate(invoice.created_at, language)}</Text>
             <Text style={styles.invoiceMeta}>{t.case}: {caseData.case_number}</Text>
           </View>
         </View>

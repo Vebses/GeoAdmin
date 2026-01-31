@@ -53,11 +53,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       case: CaseWithRelations;
     };
 
-    // Check if we have a cached PDF and don't need to regenerate
-    if (typedInvoice.pdf_url && !regenerate) {
-      // Return cached PDF URL (redirect)
-      return NextResponse.redirect(typedInvoice.pdf_url);
-    }
+    // Note: PDF caching via pdf_url is not currently implemented.
+    // PDFs are generated on-demand for freshness. To enable caching,
+    // upload the PDF to Supabase storage and store the URL in pdf_url.
+    // The regenerate param can force a new PDF even if cached.
 
     // Generate PDF
     const pdfBuffer = await generateInvoicePDF({
