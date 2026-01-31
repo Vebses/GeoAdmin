@@ -48,9 +48,9 @@ const caseColumns = [
   { key: 'total_service_cost', label: 'სერვისის ღირებულება' },
   { key: 'total_assistance_cost', label: 'ასისტანსის ღირებულება' },
   { key: 'total_commission_cost', label: 'საკომისიო' },
-  { key: 'actions_count', label: 'მოქმედებების რაოდენობა' },
-  { key: 'documents_count', label: 'დოკუმენტების რაოდენობა' },
-  { key: 'invoices_count', label: 'ინვოისების რაოდენობა' },
+  { key: 'actions_inline', label: 'მოქმედებები (დეტალური)' },
+  { key: 'invoices_inline', label: 'ინვოისები (დეტალური)' },
+  { key: 'documents_inline', label: 'დოკუმენტები (დეტალური)' },
   { key: 'creator_name', label: 'შემქმნელი' },
   { key: 'created_at', label: 'შექმნის თარიღი' },
 ];
@@ -238,6 +238,30 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         return;
       }
 
+      // Transform cases to include inline data (actual details instead of just counts)
+      const casesWithInlineData = cases.map((caseData: Record<string, unknown>) => {
+        const caseNumber = caseData.case_number;
+        const caseActions = (actions || []).filter((a: Record<string, unknown>) => a.case_number === caseNumber);
+        const caseInvoices = (invoices || []).filter((i: Record<string, unknown>) => i.case_number === caseNumber);
+        const caseDocs = (documents || []).filter((d: Record<string, unknown>) => d.case_number === caseNumber);
+
+        return {
+          ...caseData,
+          // INLINE actions: "Hospital Referral (GEL 100); Lab Work (USD 50)"
+          actions_inline: caseActions
+            .map((a: Record<string, unknown>) => `${a.service_name} (${a.service_currency} ${a.service_cost})`)
+            .join('; ') || '-',
+          // INLINE invoices: "INV-001 (გადახდილი, 500 GEL); INV-002 (მოლოდინში, 300 GEL)"
+          invoices_inline: caseInvoices
+            .map((i: Record<string, unknown>) => `${i.invoice_number} (${invoiceStatusLabels[String(i.status)] || i.status}, ${i.total} ${i.currency})`)
+            .join('; ') || '-',
+          // INLINE documents: "patient_doc.pdf [პაციენტის]; report.pdf [სამედიცინო]"
+          documents_inline: caseDocs
+            .map((d: Record<string, unknown>) => `${d.file_name} [${documentTypeLabels[String(d.type)] || d.type}]`)
+            .join('; ') || '-',
+        };
+      });
+
       // Generate filename with date range
       let filename = 'cases';
       if (dateRange.from && dateRange.to) {
@@ -255,12 +279,23 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
       workbook.creator = 'GeoAdmin';
       workbook.created = new Date();
 
-      // Sheet 1: Cases
+      // Sheet 1: Cases (with inline data)
       const casesSheet = workbook.addWorksheet('ქეისები');
-      addDataToWorksheet(casesSheet, cases, caseColumns, {
+      addDataToWorksheet(casesSheet, casesWithInlineData, caseColumns, {
         opened_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
         closed_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
         created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+      });
+
+      // Set text wrapping for inline data columns
+      const inlineColumnKeys = ['actions_inline', 'invoices_inline', 'documents_inline'];
+      inlineColumnKeys.forEach(key => {
+        const colIndex = caseColumns.findIndex(c => c.key === key) + 1;
+        if (colIndex > 0) {
+          const col = casesSheet.getColumn(colIndex);
+          col.alignment = { wrapText: true, vertical: 'top' };
+          col.width = 45;
+        }
       });
 
       // Sheet 2: Actions
