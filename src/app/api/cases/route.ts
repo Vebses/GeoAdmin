@@ -134,8 +134,11 @@ export async function POST(request: Request) {
 
     // Parse and validate request body
     const body = await request.json();
+    console.log('Cases POST - received body:', JSON.stringify(body, null, 2));
+
     const validationResult = caseSchema.safeParse(body);
-    
+    console.log('Cases POST - validation result:', validationResult.success ? 'valid' : validationResult.error?.flatten());
+
     if (!validationResult.success) {
       return NextResponse.json(
         { 
@@ -256,8 +259,23 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Cases POST error:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
+      {
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'სერვერის შეცდომა',
+          // Include error details in development
+          ...(process.env.NODE_ENV === 'development' && {
+            debug: error instanceof Error ? error.message : String(error)
+          })
+        }
+      },
       { status: 500 }
     );
   }
