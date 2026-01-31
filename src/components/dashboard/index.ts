@@ -5,3 +5,6 @@ export type { Period } from './period-selector';
 export { CasesChart } from './cases-chart';
 export { StatusBreakdown } from './status-breakdown';
 export { RecentActivity } from './recent-activity';
+export { AlertsPanel } from './alerts-panel';
+export { TeamPerformance } from './team-performance';
+export { FinancialStats } from './financial-stats';

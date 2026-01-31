@@ -8,12 +8,29 @@ import {
   CasesChart,
   StatusBreakdown,
   RecentActivity,
+  AlertsPanel,
+  TeamPerformance,
+  FinancialStats,
 } from '@/components/dashboard';
 import type { Period } from '@/components/dashboard';
-import { useDashboardStats, useDashboardCharts, useDashboardActivity } from '@/hooks/use-dashboard';
+import {
+  useDashboardStats,
+  useDashboardCharts,
+  useDashboardActivity,
+  useEnhancedStats,
+  useDashboardAlerts,
+  useTeamPerformance,
+} from '@/hooks/use-dashboard';
 import { useRealtimeDashboard } from '@/hooks/use-realtime';
+import { useAuth } from '@/hooks/use-auth';
+
+// Roles that can see financial stats and team performance
+const ADMIN_ROLES = ['super_admin', 'manager', 'admin'];
+const FINANCIAL_ROLES = ['super_admin', 'manager', 'admin', 'accountant'];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+
   // Load period from localStorage or default to 'month'
   const [period, setPeriod] = useState<Period>('month');
 
@@ -29,10 +46,19 @@ export default function DashboardPage() {
     localStorage.setItem('dashboard_period', newPeriod);
   };
 
+  // Role checks
+  const canSeeFinancial = user?.role && FINANCIAL_ROLES.includes(user.role);
+  const canSeeTeam = user?.role && ADMIN_ROLES.includes(user.role);
+
   // Fetch data
   const { data: stats, isLoading: statsLoading } = useDashboardStats(period);
   const { data: charts, isLoading: chartsLoading } = useDashboardCharts(period);
   const { data: activities, isLoading: activityLoading, refetch: refetchActivity } = useDashboardActivity(10);
+
+  // Enhanced data
+  const { data: enhancedStats, isLoading: enhancedLoading } = useEnhancedStats(period);
+  const { data: alerts, isLoading: alertsLoading } = useDashboardAlerts();
+  const { data: teamData, isLoading: teamLoading } = useTeamPerformance(period);
 
   // Enable realtime updates
   useRealtimeDashboard();
@@ -54,8 +80,13 @@ export default function DashboardPage() {
         <PeriodSelector value={period} onChange={handlePeriodChange} />
       </div>
 
-      {/* Stats Grid */}
+      {/* Operational Stats Grid */}
       <StatsGrid stats={stats} loading={statsLoading} />
+
+      {/* Financial Stats - Only for admin/manager/accountant */}
+      {canSeeFinancial && (
+        <FinancialStats stats={enhancedStats?.financial} loading={enhancedLoading} />
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -63,14 +94,24 @@ export default function DashboardPage() {
         <StatusBreakdown data={charts?.statusBreakdown} loading={chartsLoading} />
       </div>
 
+      {/* Alerts Panel - For admin/manager */}
+      {canSeeTeam && (
+        <AlertsPanel alerts={alerts} loading={alertsLoading} />
+      )}
+
+      {/* Team Performance - Only for admin/manager */}
+      {canSeeTeam && (
+        <TeamPerformance members={teamData?.members} loading={teamLoading} />
+      )}
+
       {/* Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RecentActivity 
-          activities={activities} 
+        <RecentActivity
+          activities={activities}
           loading={activityLoading}
           onRefresh={() => refetchActivity()}
         />
-        
+
         {/* Quick Actions */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">
