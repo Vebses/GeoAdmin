@@ -8,7 +8,7 @@ import { EmptyState, ConfirmDialog } from '@/components/ui';
 import { ExportButton } from '@/components/shared/export-button';
 import { CaseFilters, type CaseFiltersState } from './case-filters';
 import { CaseStatusBadge } from './case-status-badge';
-import { CaseViewPanel } from './case-view-panel';
+import { CasePreviewModal } from './case-preview-modal';
 import { CaseEditPanel } from './case-edit-panel';
 import { 
   useCases, 
@@ -439,8 +439,8 @@ export function CaseList() {
         </div>
       )}
 
-      {/* View Panel */}
-      <CaseViewPanel
+      {/* View Modal */}
+      <CasePreviewModal
         caseData={viewingCase}
         isOpen={!!viewingCase}
         onClose={() => setViewingCase(null)}

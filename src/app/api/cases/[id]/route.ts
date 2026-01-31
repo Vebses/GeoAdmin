@@ -41,8 +41,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           assistance_currency,
           commission_cost,
           commission_currency,
+          service_date,
+          comment,
           sort_order,
           executor:partners(id, name)
+        ),
+        documents:case_documents(
+          id,
+          type,
+          file_name,
+          file_url,
+          file_size,
+          mime_type,
+          created_at,
+          uploader:users(id, full_name)
+        ),
+        invoices:invoices(
+          id,
+          invoice_number,
+          status,
+          currency,
+          total,
+          created_at,
+          paid_at,
+          recipient:partners(id, name),
+          services:invoice_services(id, description, quantity, unit_price, total)
         )
       `)
       .eq('id', id)
