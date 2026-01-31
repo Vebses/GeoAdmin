@@ -78,10 +78,11 @@ export async function GET(request: NextRequest) {
 
     // Get all users who can work on cases (all roles except accountant)
     // Show all users even with 0 cases assigned
+    // Valid DB roles: manager, assistant, accountant, super_admin (NO 'admin' role exists!)
     const { data: usersData } = await supabase
       .from('users')
       .select('id, full_name, avatar_url, role')
-      .in('role', ['assistant', 'manager', 'admin', 'super_admin'])
+      .in('role', ['assistant', 'manager', 'super_admin'])
       .order('full_name');
 
     const users = (usersData || []) as UserRow[];

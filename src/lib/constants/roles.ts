@@ -9,17 +9,19 @@
  * Role Hierarchy (highest to lowest):
  * 1. super_admin - Full system access, can do everything
  * 2. manager     - Management access, can manage team and most features
- * 3. admin       - Administrative access, can manage cases and invoices
- * 4. assistant   - Operational access, can work on assigned cases
- * 5. accountant  - Financial access, can view/manage invoices only
+ * 3. assistant   - Operational access, can work on assigned cases
+ * 4. accountant  - Financial access, can view/manage invoices only
+ *
+ * NOTE: Database enum user_role has: manager, assistant, accountant, super_admin
+ *       There is NO 'admin' role in the database!
  *
  * ============================================
  */
 
 /**
- * All available roles in the system
+ * All available roles in the system (matches DB enum user_role)
  */
-export const ALL_ROLES = ['super_admin', 'manager', 'admin', 'assistant', 'accountant'] as const;
+export const ALL_ROLES = ['super_admin', 'manager', 'assistant', 'accountant'] as const;
 
 export type UserRole = (typeof ALL_ROLES)[number];
 
@@ -37,7 +39,7 @@ export const SUPER_ADMIN_ROLES = ['super_admin', 'manager'] as const;
  *
  * ALWAYS include super_admin first!
  */
-export const ADMIN_ROLES = ['super_admin', 'manager', 'admin'] as const;
+export const ADMIN_ROLES = ['super_admin', 'manager'] as const;
 
 /**
  * Roles that can view financial information
@@ -45,13 +47,13 @@ export const ADMIN_ROLES = ['super_admin', 'manager', 'admin'] as const;
  *
  * ALWAYS include super_admin first!
  */
-export const FINANCIAL_ROLES = ['super_admin', 'manager', 'admin', 'accountant'] as const;
+export const FINANCIAL_ROLES = ['super_admin', 'manager', 'accountant'] as const;
 
 /**
  * Roles that can be assigned cases
  * Use for: case assignment dropdown
  */
-export const ASSIGNABLE_ROLES = ['super_admin', 'manager', 'admin', 'assistant'] as const;
+export const ASSIGNABLE_ROLES = ['super_admin', 'manager', 'assistant'] as const;
 
 /**
  * Role display labels in Georgian
@@ -59,7 +61,6 @@ export const ASSIGNABLE_ROLES = ['super_admin', 'manager', 'admin', 'assistant']
 export const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'სუპერ ადმინი',
   manager: 'მენეჯერი',
-  admin: 'ადმინი',
   assistant: 'ასისტანტი',
   accountant: 'ბუღალტერი',
 };
@@ -70,7 +71,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const ROLE_COLORS: Record<UserRole, { bg: string; text: string }> = {
   super_admin: { bg: 'bg-purple-100', text: 'text-purple-700' },
   manager: { bg: 'bg-blue-100', text: 'text-blue-700' },
-  admin: { bg: 'bg-green-100', text: 'text-green-700' },
   assistant: { bg: 'bg-amber-100', text: 'text-amber-700' },
   accountant: { bg: 'bg-gray-100', text: 'text-gray-700' },
 };
@@ -117,18 +117,18 @@ export function canBeAssignedCases(role: string | undefined | null): boolean {
 /**
  * Permission matrix for quick reference:
  *
- * Feature                  | super_admin | manager | admin | assistant | accountant
- * -------------------------|-------------|---------|-------|-----------|------------
- * View Dashboard           | ✓           | ✓       | ✓     | ✓         | ✓
- * View Financial Stats     | ✓           | ✓       | ✓     | ✗         | ✓
- * View Team Workload       | ✓           | ✓       | ✓     | ✗         | ✗
- * View Alerts Panel        | ✓           | ✓       | ✓     | ✗         | ✗
- * Manage Users             | ✓           | ✓       | ✗     | ✗         | ✗
- * Manage Companies         | ✓           | ✓       | ✗     | ✗         | ✗
- * Manage Categories        | ✓           | ✓       | ✗     | ✗         | ✗
- * Empty Trash              | ✓           | ✓       | ✗     | ✗         | ✗
- * Permanent Delete         | ✓           | ✓       | ✗     | ✗         | ✗
- * Create/Edit Cases        | ✓           | ✓       | ✓     | ✓         | ✗
- * Create/Edit Invoices     | ✓           | ✓       | ✓     | ✓         | ✓
- * Be Assigned Cases        | ✓           | ✓       | ✓     | ✓         | ✗
+ * Feature                  | super_admin | manager | assistant | accountant
+ * -------------------------|-------------|---------|-----------|------------
+ * View Dashboard           | ✓           | ✓       | ✓         | ✓
+ * View Financial Stats     | ✓           | ✓       | ✗         | ✓
+ * View Team Workload       | ✓           | ✓       | ✗         | ✗
+ * View Alerts Panel        | ✓           | ✓       | ✗         | ✗
+ * Manage Users             | ✓           | ✓       | ✗         | ✗
+ * Manage Companies         | ✓           | ✓       | ✗         | ✗
+ * Manage Categories        | ✓           | ✓       | ✗         | ✗
+ * Empty Trash              | ✓           | ✓       | ✗         | ✗
+ * Permanent Delete         | ✓           | ✓       | ✗         | ✗
+ * Create/Edit Cases        | ✓           | ✓       | ✓         | ✗
+ * Create/Edit Invoices     | ✓           | ✓       | ✓         | ✓
+ * Be Assigned Cases        | ✓           | ✓       | ✓         | ✗
  */
