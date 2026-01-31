@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseAssigned } from '@/lib/notifications';
+import { logCaseActivity } from '@/lib/activity-logs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -225,6 +226,19 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    // Log activity
+    await logCaseActivity(
+      user.id,
+      (currentUserProfile as any)?.full_name,
+      'created',
+      (newCase as any).id,
+      caseNumber,
+      {
+        patient_name: caseData.patient_name,
+        assigned_to: assignedTo,
+      }
+    );
 
     // Send notification if assigned to someone else (manager assigning to assistant)
     if (assignedTo && assignedTo !== user.id) {

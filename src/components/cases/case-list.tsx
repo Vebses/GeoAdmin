@@ -93,12 +93,19 @@ export function CaseList() {
   const canEditCase = (caseItem: CaseWithRelations | null): boolean => {
     if (!caseItem) return false;
     if (isManager) return true;
+    // Case creator can edit their own cases
+    if (caseItem.created_by === currentUser?.id) return true;
+    // Assigned assistant can edit
     if (isAssistant && caseItem.assigned_to === currentUser?.id) return true;
     return false;
   };
 
-  const canDeleteCase = (): boolean => {
-    return isManager;
+  const canDeleteCase = (caseItem: CaseWithRelations | null): boolean => {
+    if (!caseItem) return false;
+    if (isManager) return true;
+    // Case creator can delete their own cases
+    if (caseItem.created_by === currentUser?.id) return true;
+    return false;
   };
 
   // Handlers
@@ -281,7 +288,7 @@ export function CaseList() {
               <tbody className="divide-y divide-gray-50">
                 {cases.map((caseItem) => {
                   const canEdit = canEditCase(caseItem);
-                  const canDelete = canDeleteCase();
+                  const canDelete = canDeleteCase(caseItem);
                   
                   return (
                     <tr
@@ -424,7 +431,7 @@ export function CaseList() {
         isOpen={!!viewingCase}
         onClose={() => setViewingCase(null)}
         onEdit={canEditCase(viewingCase) ? handleEdit : undefined}
-        onDelete={canDeleteCase() ? setDeleteCase : undefined}
+        onDelete={canDeleteCase(viewingCase) ? setDeleteCase : undefined}
       />
 
       {/* Edit Panel */}

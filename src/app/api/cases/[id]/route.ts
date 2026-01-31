@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseReassigned, notifyCaseStatusChanged } from '@/lib/notifications';
+import { logCaseActivity } from '@/lib/activity-logs';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -97,7 +98,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Check if case exists and get current data
     const { data: existingCase, error: findError } = await supabase
       .from('cases')
-      .select('id, case_number, assigned_to, status')
+      .select('id, case_number, assigned_to, status, created_by')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -109,16 +110,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const existingCaseData = existingCase as { id: string; case_number: string; assigned_to: string | null; status: string };
+    const existingCaseData = existingCase as { id: string; case_number: string; assigned_to: string | null; status: string; created_by: string | null };
 
-    // PERMISSION CHECK: Assistants can only edit their own cases
-    if (userRole === 'assistant') {
-      if (existingCaseData.assigned_to !== user.id) {
-        return NextResponse.json(
-          { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება' } },
-          { status: 403 }
-        );
-      }
+    // PERMISSION CHECK:
+    // - Managers can edit any case
+    // - Case creators can edit their own cases
+    // - Assigned assistants can edit their assigned cases
+    const isCreator = existingCaseData.created_by === user.id;
+    const isAssignedUser = existingCaseData.assigned_to === user.id;
+
+    if (userRole !== 'manager' && !isCreator && !isAssignedUser) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება' } },
+        { status: 403 }
+      );
     }
 
     // Parse and validate request body
@@ -141,10 +146,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const caseData = validationResult.data;
 
-    // IMPORTANT: For assistants, don't allow changing assigned_to
+    // IMPORTANT: Only managers can reassign cases
     let newAssignedTo = caseData.assigned_to;
-    if (userRole === 'assistant') {
-      // Assistants cannot reassign cases - keep original assignment
+    if (userRole !== 'manager') {
+      // Non-managers cannot reassign cases - keep original assignment
       newAssignedTo = existingCaseData.assigned_to || undefined;
     }
 
@@ -204,6 +209,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (error) throw error;
 
+    // Log activity
+    const changedFields: string[] = [];
+    if (caseData.status !== existingCaseData.status) changedFields.push('status');
+    if (newAssignedTo !== existingCaseData.assigned_to) changedFields.push('assigned_to');
+
+    await logCaseActivity(
+      user.id,
+      (currentUserProfile as any)?.full_name,
+      'updated',
+      id,
+      existingCaseData.case_number,
+      {
+        changed_fields: changedFields.length > 0 ? changedFields : undefined,
+        old_status: existingCaseData.status,
+        new_status: caseData.status,
+        old_assigned_to: existingCaseData.assigned_to,
+        new_assigned_to: newAssignedTo,
+      }
+    );
+
     // Send notifications for assignment changes
     if (newAssignedTo && newAssignedTo !== existingCaseData.assigned_to) {
       await notifyCaseReassigned(
@@ -254,24 +279,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if user is manager
+    // Get current user's profile
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if ((profile as any)?.role !== 'manager') {
-      return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია ქეისის წაშლა' } },
-        { status: 403 }
-      );
-    }
+    const userRole = (profile as any)?.role || 'assistant';
 
-    // Check if case exists
+    // Check if case exists and get creator info
     const { data: existingCase, error: findError } = await supabase
       .from('cases')
-      .select('id, case_number')
+      .select('id, case_number, created_by')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -280,6 +300,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
         { status: 404 }
+      );
+    }
+
+    const existingCaseData = existingCase as { id: string; case_number: string; created_by: string | null };
+
+    // PERMISSION CHECK: Managers or case creators can delete
+    const isCreator = existingCaseData.created_by === user.id;
+    if (userRole !== 'manager' && !isCreator) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის წაშლის უფლება' } },
+        { status: 403 }
       );
     }
 
@@ -296,6 +327,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('id', id);
 
     if (error) throw error;
+
+    // Log activity
+    await logCaseActivity(
+      user.id,
+      undefined,
+      'deleted',
+      id,
+      existingCaseData.case_number,
+      { deleted_by_creator: isCreator }
+    );
 
     return NextResponse.json({
       success: true,
