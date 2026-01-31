@@ -175,12 +175,12 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
   const [pendingFormat, setPendingFormat] = useState<ExportFormat | null>(null);
 
   const handleExportClick = (format: ExportFormat) => {
-    if (entity === 'cases' && format === 'xlsx') {
-      // Show date range modal for comprehensive Excel export
+    if (entity === 'cases') {
+      // Show date range modal for comprehensive export (both Excel and CSV)
       setPendingFormat(format);
       setShowDateModal(true);
     } else {
-      // Direct export for CSV or non-cases entities
+      // Direct export for non-cases entities
       handleExport(format);
     }
   };
@@ -193,7 +193,7 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
     setPendingFormat(null);
   };
 
-  const handleComprehensiveExport = async (_format: ExportFormat, dateRange: DateRange) => {
+  const handleComprehensiveExport = async (format: ExportFormat, dateRange: DateRange) => {
     setIsExporting(true);
     try {
       // Build query string
@@ -274,71 +274,99 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         filename = `cases_all_${new Date().toISOString().split('T')[0]}`;
       }
 
-      // Create multi-sheet Excel workbook
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'GeoAdmin';
-      workbook.created = new Date();
+      if (format === 'xlsx') {
+        // Create multi-sheet Excel workbook
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'GeoAdmin';
+        workbook.created = new Date();
 
-      // Sheet 1: Cases (with inline data)
-      const casesSheet = workbook.addWorksheet('ქეისები');
-      addDataToWorksheet(casesSheet, casesWithInlineData, caseColumns, {
-        opened_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-        closed_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-        created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
-      });
+        // Sheet 1: Cases (with inline data)
+        const casesSheet = workbook.addWorksheet('ქეისები');
+        addDataToWorksheet(casesSheet, casesWithInlineData, caseColumns, {
+          opened_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
+          closed_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
+          created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+        });
 
-      // Set text wrapping for inline data columns
-      const inlineColumnKeys = ['actions_inline', 'invoices_inline', 'documents_inline'];
-      inlineColumnKeys.forEach(key => {
-        const colIndex = caseColumns.findIndex(c => c.key === key) + 1;
-        if (colIndex > 0) {
-          const col = casesSheet.getColumn(colIndex);
-          col.alignment = { wrapText: true, vertical: 'top' };
-          col.width = 45;
+        // Set text wrapping for inline data columns
+        const inlineColumnKeys = ['actions_inline', 'invoices_inline', 'documents_inline'];
+        inlineColumnKeys.forEach(key => {
+          const colIndex = caseColumns.findIndex(c => c.key === key) + 1;
+          if (colIndex > 0) {
+            const col = casesSheet.getColumn(colIndex);
+            col.alignment = { wrapText: true, vertical: 'top' };
+            col.width = 45;
+          }
+        });
+
+        // Sheet 2: Actions
+        const actionsSheet = workbook.addWorksheet('მოქმედებები');
+        if (actions && actions.length > 0) {
+          addDataToWorksheet(actionsSheet, actions, actionColumns, {
+            service_date: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
+            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+          });
+        } else {
+          actionsSheet.addRow(['მონაცემები არ მოიძებნა']);
         }
-      });
 
-      // Sheet 2: Actions
-      const actionsSheet = workbook.addWorksheet('მოქმედებები');
-      if (actions && actions.length > 0) {
-        addDataToWorksheet(actionsSheet, actions, actionColumns, {
-          service_date: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-          created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+        // Sheet 3: Documents
+        const documentsSheet = workbook.addWorksheet('დოკუმენტები');
+        if (documents && documents.length > 0) {
+          addDataToWorksheet(documentsSheet, documents, documentColumns, {
+            type: (val) => documentTypeLabels[String(val)] || val,
+            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+          });
+        } else {
+          documentsSheet.addRow(['მონაცემები არ მოიძებნა']);
+        }
+
+        // Sheet 4: Invoices
+        const invoicesSheet = workbook.addWorksheet('ინვოისები');
+        if (invoices && invoices.length > 0) {
+          addDataToWorksheet(invoicesSheet, invoices, invoiceColumns, {
+            status: (val) => invoiceStatusLabels[String(val)] || val,
+            paid_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+          });
+        } else {
+          invoicesSheet.addRow(['მონაცემები არ მოიძებნა']);
+        }
+
+        // Generate and download Excel
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         });
+        saveAs(blob, `${filename}.xlsx`);
+        toast.success(`Excel ფაილი გადმოწერილია (${cases.length} ქეისი)`);
       } else {
-        actionsSheet.addRow(['მონაცემები არ მოიძებნა']);
+        // Generate CSV with inline data
+        const headers = caseColumns.map(c => c.label);
+        const csvRows = [
+          headers.join(','),
+          ...casesWithInlineData.map((row: Record<string, unknown>) =>
+            caseColumns.map(col => {
+              let val = String(row[col.key] || '');
+              // Handle date formatting
+              if (col.key === 'opened_at' || col.key === 'closed_at') {
+                val = val ? new Date(val).toLocaleDateString('ka-GE') : '';
+              } else if (col.key === 'created_at') {
+                val = val ? new Date(val).toLocaleString('ka-GE') : '';
+              }
+              // Escape CSV special characters (including semicolon since we use it as delimiter in inline data)
+              if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes(';')) {
+                return `"${val.replace(/"/g, '""')}"`;
+              }
+              return val;
+            }).join(',')
+          ),
+        ];
+        const csvContent = '\uFEFF' + csvRows.join('\n'); // BOM for UTF-8 Excel support
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, `${filename}.csv`);
+        toast.success(`CSV ფაილი გადმოწერილია (${cases.length} ქეისი)`);
       }
-
-      // Sheet 3: Documents
-      const documentsSheet = workbook.addWorksheet('დოკუმენტები');
-      if (documents && documents.length > 0) {
-        addDataToWorksheet(documentsSheet, documents, documentColumns, {
-          type: (val) => documentTypeLabels[String(val)] || val,
-          created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
-        });
-      } else {
-        documentsSheet.addRow(['მონაცემები არ მოიძებნა']);
-      }
-
-      // Sheet 4: Invoices
-      const invoicesSheet = workbook.addWorksheet('ინვოისები');
-      if (invoices && invoices.length > 0) {
-        addDataToWorksheet(invoicesSheet, invoices, invoiceColumns, {
-          status: (val) => invoiceStatusLabels[String(val)] || val,
-          paid_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
-          created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
-        });
-      } else {
-        invoicesSheet.addRow(['მონაცემები არ მოიძებნა']);
-      }
-
-      // Generate and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      saveAs(blob, `${filename}.xlsx`);
-      toast.success(`Excel ფაილი გადმოწერილია (${cases.length} ქეისი)`);
     } catch (error) {
       console.error('Export error:', error);
       toast.error('ექსპორტი ვერ მოხერხდა');
