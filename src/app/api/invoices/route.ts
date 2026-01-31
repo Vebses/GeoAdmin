@@ -66,7 +66,9 @@ export async function GET(request: NextRequest) {
       query = query.lte('created_at', created_to);
     }
     if (search) {
-      query = query.or(`invoice_number.ilike.%${search}%`);
+      // Sanitize search input to prevent injection
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`invoice_number.ilike.%${sanitizedSearch}%`);
     }
 
     // Apply pagination
@@ -139,34 +141,16 @@ export async function POST(request: Request) {
 
     const invoiceData = validationResult.data;
 
-    // Get sender company for prefix
-    const { data: senderCompanyData } = await supabase
-      .from('our_companies')
-      .select('invoice_prefix')
-      .eq('id', invoiceData.sender_id)
-      .single();
+    // Generate invoice number atomically using database function
+    const { data: invoiceNumberData, error: invoiceNumberError } = await supabase
+      .rpc('generate_invoice_number', { company_id: invoiceData.sender_id } as never);
 
-    const senderCompany = senderCompanyData as { invoice_prefix: string | null } | null;
-    const prefix = senderCompany?.invoice_prefix || 'INV';
-
-    // Generate invoice number
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const { data: lastInvoiceData } = await supabase
-      .from('invoices')
-      .select('invoice_number')
-      .like('invoice_number', `${prefix}-${year}${month}-%`)
-      .order('invoice_number', { ascending: false })
-      .limit(1)
-      .single();
-
-    const lastInvoice = lastInvoiceData as { invoice_number: string } | null;
-    let nextNumber = 1;
-    if (lastInvoice?.invoice_number) {
-      const parts = lastInvoice.invoice_number.split('-');
-      nextNumber = parseInt(parts[2]) + 1;
+    if (invoiceNumberError) {
+      console.error('Failed to generate invoice number:', invoiceNumberError);
+      throw new Error('Failed to generate invoice number');
     }
-    const invoiceNumber = `${prefix}-${year}${month}-${String(nextNumber).padStart(4, '0')}`;
+
+    const invoiceNumber = invoiceNumberData as string;
 
     // Calculate totals
     const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);

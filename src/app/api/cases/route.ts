@@ -80,7 +80,9 @@ export async function GET(request: NextRequest) {
       query = query.eq('insurance_id', insurance_id);
     }
     if (search) {
-      query = query.or(`case_number.ilike.%${search}%,patient_name.ilike.%${search}%,patient_id.ilike.%${search}%`);
+      // Sanitize search input to prevent injection
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`case_number.ilike.%${sanitizedSearch}%,patient_name.ilike.%${sanitizedSearch}%,patient_id.ilike.%${sanitizedSearch}%`);
     }
 
     // Apply pagination
@@ -161,22 +163,16 @@ export async function POST(request: Request) {
       assignedTo = user.id;
     }
 
-    // Generate case number
-    const year = new Date().getFullYear();
-    const { data: lastCase } = await supabase
-      .from('cases')
-      .select('case_number')
-      .like('case_number', `GEO-${year}-%`)
-      .order('case_number', { ascending: false })
-      .limit(1)
-      .single();
+    // Generate case number atomically using database function
+    const { data: caseNumberData, error: caseNumberError } = await supabase
+      .rpc('generate_case_number');
 
-    let nextNumber = 1;
-    if (lastCase && (lastCase as { case_number: string }).case_number) {
-      const parts = (lastCase as { case_number: string }).case_number.split('-');
-      nextNumber = parseInt(parts[2]) + 1;
+    if (caseNumberError) {
+      console.error('Failed to generate case number:', caseNumberError);
+      throw new Error('Failed to generate case number');
     }
-    const caseNumber = `GEO-${year}-${String(nextNumber).padStart(4, '0')}`;
+
+    const caseNumber = caseNumberData as string;
 
     // Build insert object
     const insertData = {

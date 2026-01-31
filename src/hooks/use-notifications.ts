@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -46,6 +46,12 @@ export function useNotifications(userId?: string) {
   const queryClient = useQueryClient();
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // Use ref for sound enabled state to avoid recreating subscription
+  const soundEnabledRef = useRef(soundEnabled);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
   // Fetch notifications
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['notifications'],
@@ -62,9 +68,9 @@ export function useNotifications(userId?: string) {
     },
   });
 
-  // Play notification sound
+  // Play notification sound - uses ref to avoid dependency issues
   const playSound = useCallback(() => {
-    if (soundEnabled && typeof window !== 'undefined') {
+    if (soundEnabledRef.current && typeof window !== 'undefined') {
       try {
         const audio = new Audio('/sounds/notification.mp3');
         audio.volume = 0.5;
@@ -75,14 +81,14 @@ export function useNotifications(userId?: string) {
         // Ignore errors
       }
     }
-  }, [soundEnabled]);
+  }, []);
 
   // Subscribe to realtime notifications
   useEffect(() => {
     if (!userId) return;
 
     const supabase = createClient();
-    
+
     const channel = supabase
       .channel('notifications')
       .on(
@@ -96,7 +102,7 @@ export function useNotifications(userId?: string) {
         (payload) => {
           // Add new notification to cache
           const newNotification = payload.new as Notification;
-          
+
           queryClient.setQueryData<NotificationsResponse>(['notifications'], (old) => {
             if (!old) return { notifications: [newNotification], unreadCount: 1 };
             return {

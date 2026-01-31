@@ -40,7 +40,9 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,legal_name.ilike.%${search}%,id_code.ilike.%${search}%`);
+      // Sanitize search input to prevent injection
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`name.ilike.%${sanitizedSearch}%,legal_name.ilike.%${sanitizedSearch}%,id_code.ilike.%${sanitizedSearch}%`);
     }
 
     // Apply sorting

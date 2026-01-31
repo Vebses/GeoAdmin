@@ -127,9 +127,21 @@ export default function UsersPage() {
   };
 
   const handleResendInvitation = async (invitation: PendingInvitation) => {
-    toast.info('მოწვევის ხელახლა გაგზავნა...');
-    // TODO: Implement resend
-    toast.success('მოწვევა ხელახლა გაიგზავნა');
+    try {
+      toast.info('მოწვევის ხელახლა გაგზავნა...');
+      const response = await fetch(`/api/users/invite/${invitation.id}/resend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: invitation.source }),
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error?.message || 'გაგზავნა ვერ მოხერხდა');
+      }
+      toast.success('მოწვევა ხელახლა გაიგზავნა');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'გაგზავნა ვერ მოხერხდა');
+    }
   };
 
   if (isLoading) {

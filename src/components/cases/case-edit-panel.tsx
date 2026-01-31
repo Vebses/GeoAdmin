@@ -50,7 +50,18 @@ export function CaseEditPanel({
   const isAssistant = currentUser?.role === 'assistant';
   
   const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager');
-  const insurancePartners = partners.filter(p => p.category_id); // TODO: Filter by insurance category
+  // Filter insurance partners by checking if their category name indicates insurance
+  // Partners with category containing 'insurance', 'სადაზღვევო' (Georgian for insurance), or similar
+  const insurancePartners = partners.filter(p => {
+    if (!p.category_id) return false;
+    const category = (p as { category?: { name?: string; name_en?: string } }).category;
+    if (!category) return true; // If we have category_id but no loaded category, include it
+    const categoryName = (category.name || '').toLowerCase();
+    const categoryNameEn = (category.name_en || '').toLowerCase();
+    return categoryName.includes('სადაზღვევო') ||
+           categoryName.includes('დაზღვევა') ||
+           categoryNameEn.includes('insurance');
+  });
   const clientPartners = partners;
 
   const {
