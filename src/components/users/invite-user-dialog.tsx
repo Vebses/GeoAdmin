@@ -25,13 +25,14 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 
+// Schema allows all roles - actual role availability is controlled by currentUserRole prop
 const inviteSchema = z.object({
   email: z
     .string()
     .min(1, 'ელ-ფოსტა აუცილებელია')
     .email('არასწორი ელ-ფოსტის ფორმატი'),
   full_name: z.string().optional(),
-  role: z.enum(['manager', 'assistant', 'accountant']),
+  role: z.enum(['super_admin', 'manager', 'assistant', 'accountant']),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
@@ -40,15 +41,22 @@ interface InviteUserDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  currentUserRole?: string; // Role of the logged-in user
 }
 
 const roleDescriptions: Record<string, string> = {
+  super_admin: 'სრული წვდომა + მენეჯერების მართვა',
   manager: 'სრული წვდომა სისტემაზე',
   assistant: 'ქეისების მართვა',
   accountant: 'ინვოისების მართვა',
 };
 
-export function InviteUserDialog({ isOpen, onClose, onSuccess }: InviteUserDialogProps) {
+export function InviteUserDialog({ isOpen, onClose, onSuccess, currentUserRole }: InviteUserDialogProps) {
+  // Determine which roles the current user can assign
+  const isSuperAdmin = currentUserRole === 'super_admin';
+  const availableRoles = isSuperAdmin
+    ? ['super_admin', 'manager', 'assistant', 'accountant'] as const
+    : ['assistant', 'accountant'] as const; // Managers can only invite non-admin roles
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -152,18 +160,27 @@ export function InviteUserDialog({ isOpen, onClose, onSuccess }: InviteUserDialo
             <Label className="text-xs">როლი *</Label>
             <Select
               value={selectedRole}
-              onValueChange={(value) => setValue('role', value as 'manager' | 'assistant' | 'accountant')}
+              onValueChange={(value) => setValue('role', value as 'super_admin' | 'manager' | 'assistant' | 'accountant')}
               disabled={isLoading}
             >
               <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="manager">
-                  <div className="flex flex-col">
-                    <span>მენეჯერი</span>
-                  </div>
-                </SelectItem>
+                {isSuperAdmin && (
+                  <SelectItem value="super_admin">
+                    <div className="flex flex-col">
+                      <span>სუპერ ადმინი</span>
+                    </div>
+                  </SelectItem>
+                )}
+                {isSuperAdmin && (
+                  <SelectItem value="manager">
+                    <div className="flex flex-col">
+                      <span>მენეჯერი</span>
+                    </div>
+                  </SelectItem>
+                )}
                 <SelectItem value="assistant">
                   <div className="flex flex-col">
                     <span>ასისტენტი</span>

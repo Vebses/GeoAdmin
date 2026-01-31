@@ -78,7 +78,7 @@ export const createUserSchema = z.object({
     .string()
     .min(2, 'სახელი უნდა იყოს მინიმუმ 2 სიმბოლო')
     .max(100, 'სახელი ძალიან გრძელია'),
-  role: z.enum(['manager', 'assistant', 'accountant']),
+  role: z.enum(['super_admin', 'manager', 'assistant', 'accountant']),
   is_active: z.boolean().default(true),
   phone: z
     .string()

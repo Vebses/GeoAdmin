@@ -3,6 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import crypto from 'crypto';
 
+// Role hierarchy for permission checks
+const ADMIN_ROLES = ['super_admin', 'manager'];
+const PROTECTED_ROLES = ['super_admin', 'manager']; // Roles that only super_admin can assign
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -16,7 +20,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!role || !['manager', 'assistant', 'accountant'].includes(role)) {
+    // Valid roles now include super_admin for super_admin users
+    const validRoles = ['super_admin', 'manager', 'assistant', 'accountant'];
+    if (!role || !validRoles.includes(role)) {
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'როლი აუცილებელია' } },
         { status: 400 }
@@ -25,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Check if current user is a manager
+    // Check if current user is authenticated
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
       return NextResponse.json(
@@ -41,10 +47,20 @@ export async function POST(request: NextRequest) {
       .eq('id', currentUser.id)
       .single();
 
-    // Check if user is manager
-    if (currentUserData && currentUserData.role !== 'manager') {
+    const currentUserRole = currentUserData?.role || '';
+
+    // Check if user is admin (super_admin or manager)
+    if (!ADMIN_ROLES.includes(currentUserRole)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია მომხმარებლების მოწვევა' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ მომხმარებლების მოწვევა' } },
+        { status: 403 }
+      );
+    }
+
+    // Only super_admin can invite managers or other super_admins
+    if (PROTECTED_ROLES.includes(role) && currentUserRole !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ სუპერ ადმინს შეუძლია მენეჯერის მოწვევა' } },
         { status: 403 }
       );
     }

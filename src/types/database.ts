@@ -27,7 +27,7 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
-          role?: 'manager' | 'assistant' | 'accountant';
+          role?: 'super_admin' | 'manager' | 'assistant' | 'accountant';
           is_active?: boolean;
           avatar_url?: string | null;
           phone?: string | null;
@@ -40,7 +40,7 @@ export type Database = {
           id?: string;
           email?: string;
           full_name?: string;
-          role?: 'manager' | 'assistant' | 'accountant';
+          role?: 'super_admin' | 'manager' | 'assistant' | 'accountant';
           is_active?: boolean;
           avatar_url?: string | null;
           phone?: string | null;

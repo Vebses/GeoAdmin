@@ -30,20 +30,38 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/users/invite-user-dialog';
 import { useUsers } from '@/hooks/use-users';
+import { useAuth } from '@/hooks/use-auth';
 import { useInvitations, useCancelInvitation, type PendingInvitation } from '@/hooks/use-invitations';
 import { toast } from 'sonner';
 import type { User } from '@/types';
 
 const roleLabels: Record<string, { label: string; color: string }> = {
+  super_admin: { label: 'სუპერ ადმინი', color: 'bg-red-100 text-red-700' },
   manager: { label: 'მენეჯერი', color: 'bg-blue-100 text-blue-700' },
   assistant: { label: 'ასისტენტი', color: 'bg-green-100 text-green-700' },
   accountant: { label: 'ბუღალტერი', color: 'bg-purple-100 text-purple-700' },
 };
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
   const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useUsers();
   const { data: invitations = [], isLoading: invitationsLoading, refetch: refetchInvitations } = useInvitations();
   const cancelInvitation = useCancelInvitation();
+
+  const currentUserRole = currentUser?.role || '';
+  const isSuperAdmin = currentUserRole === 'super_admin';
+  const isManager = currentUserRole === 'manager';
+  const canManageUsers = isSuperAdmin || isManager;
+
+  // Check if current user can manage (edit/delete) a specific user
+  const canManageUser = (targetUserRole: string | undefined) => {
+    if (isSuperAdmin) return true;
+    if (isManager) {
+      // Managers cannot manage super_admins or other managers
+      return !['super_admin', 'manager'].includes(targetUserRole || '');
+    }
+    return false;
+  };
   
   const [search, setSearch] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -86,14 +104,17 @@ export default function UsersPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update');
-      
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error?.message || 'განახლება ვერ მოხერხდა');
+      }
+
       toast.success('მომხმარებელი განახლდა');
       setIsEditOpen(false);
       setEditingUser(null);
       refetchUsers();
     } catch (error) {
-      toast.error('განახლება ვერ მოხერხდა');
+      toast.error(error instanceof Error ? error.message : 'განახლება ვერ მოხერხდა');
     } finally {
       setIsSaving(false);
     }
@@ -101,19 +122,22 @@ export default function UsersPage() {
 
   const handleDelete = async () => {
     if (!deleteUser) return;
-    
+
     try {
       const response = await fetch(`/api/users/${deleteUser.id}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete');
-      
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error?.message || 'წაშლა ვერ მოხერხდა');
+      }
+
       toast.success('მომხმარებელი წაიშალა');
       setDeleteUser(null);
       refetchUsers();
     } catch (error) {
-      toast.error('წაშლა ვერ მოხერხდა');
+      toast.error(error instanceof Error ? error.message : 'წაშლა ვერ მოხერხდა');
     }
   };
 
@@ -286,27 +310,29 @@ export default function UsersPage() {
                 {roleLabels[user.role || 'assistant'].label}
               </Badge>
 
-              {/* Actions */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm">
-                    <MoreVertical size={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleEdit(user)}>
-                    <Pencil size={14} className="mr-2" />
-                    რედაქტირება
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => setDeleteUser(user)}
-                    className="text-red-600"
-                  >
-                    <Trash2 size={14} className="mr-2" />
-                    წაშლა
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Actions - only show if user can manage this user */}
+              {canManageUser(user.role) && user.id !== currentUser?.id && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-sm">
+                      <MoreVertical size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEdit(user)}>
+                      <Pencil size={14} className="mr-2" />
+                      რედაქტირება
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setDeleteUser(user)}
+                      className="text-red-600"
+                    >
+                      <Trash2 size={14} className="mr-2" />
+                      წაშლა
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           ))}
         </div>
@@ -333,6 +359,7 @@ export default function UsersPage() {
         isOpen={isInviteOpen}
         onClose={() => setIsInviteOpen(false)}
         onSuccess={() => refetchInvitations()}
+        currentUserRole={currentUserRole}
       />
 
       {/* Edit Dialog */}
@@ -375,17 +402,22 @@ export default function UsersPage() {
                 <Label className="text-xs">როლი</Label>
                 <Select
                   value={editingUser.role || 'assistant'}
-                  onValueChange={(value) => setEditingUser({ ...editingUser, role: value as 'manager' | 'assistant' | 'accountant' })}
+                  onValueChange={(value) => setEditingUser({ ...editingUser, role: value as 'super_admin' | 'manager' | 'assistant' | 'accountant' })}
+                  disabled={!isSuperAdmin && ['super_admin', 'manager'].includes(editingUser.role || '')}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manager">მენეჯერი</SelectItem>
+                    {isSuperAdmin && <SelectItem value="super_admin">სუპერ ადმინი</SelectItem>}
+                    {isSuperAdmin && <SelectItem value="manager">მენეჯერი</SelectItem>}
                     <SelectItem value="assistant">ასისტენტი</SelectItem>
                     <SelectItem value="accountant">ბუღალტერი</SelectItem>
                   </SelectContent>
                 </Select>
+                {!isSuperAdmin && ['super_admin', 'manager'].includes(editingUser.role || '') && (
+                  <p className="text-[10px] text-amber-600">მხოლოდ სუპერ ადმინს შეუძლია ამ როლის შეცვლა</p>
+                )}
               </div>
             </div>
           )}

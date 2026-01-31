@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Role hierarchy for permission checks
+const ADMIN_ROLES = ['super_admin', 'manager'];
+const PROTECTED_ROLES = ['super_admin', 'manager']; // Roles that only super_admin can manage
+
+function canManageUser(currentUserRole: string, targetUserRole: string): boolean {
+  // Super admin can manage anyone
+  if (currentUserRole === 'super_admin') return true;
+  // Manager can only manage non-admin users
+  if (currentUserRole === 'manager') {
+    return !PROTECTED_ROLES.includes(targetUserRole);
+  }
+  return false;
+}
+
+function canAssignRole(currentUserRole: string, newRole: string): boolean {
+  // Super admin can assign any role
+  if (currentUserRole === 'super_admin') return true;
+  // Manager can only assign non-admin roles
+  if (currentUserRole === 'manager') {
+    return !PROTECTED_ROLES.includes(newRole);
+  }
+  return false;
+}
+
 // GET /api/users/[id] - Get single user
 export async function GET(
   request: NextRequest,
@@ -62,7 +86,7 @@ export async function PUT(
       );
     }
 
-    // Check if current user is manager (only managers can change roles)
+    // Get current user's role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentUser } = await (supabase
       .from('users') as any)
@@ -70,18 +94,50 @@ export async function PUT(
       .eq('id', authUser.id)
       .single();
 
-    if (role && currentUser?.role !== 'manager') {
-      return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only managers can change roles' } },
-        { status: 403 }
-      );
+    const currentUserRole = currentUser?.role || '';
+
+    // Get target user's current role (to check if we can manage them)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: targetUser } = await (supabase
+      .from('users') as any)
+      .select('role')
+      .eq('id', id)
+      .single();
+
+    const targetUserRole = targetUser?.role || '';
+
+    // Check if trying to change role
+    if (role && role !== targetUserRole) {
+      // Must be admin to change roles
+      if (!ADMIN_ROLES.includes(currentUserRole)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ როლის ცვლილება' } },
+          { status: 403 }
+        );
+      }
+      // Check if allowed to assign this role
+      if (!canAssignRole(currentUserRole, role)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ სუპერ ადმინს შეუძლია მენეჯერის როლის მინიჭება' } },
+          { status: 403 }
+        );
+      }
+      // Check if allowed to manage this user
+      if (!canManageUser(currentUserRole, targetUserRole)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ სუპერ ადმინს შეუძლია მენეჯერის რედაქტირება' } },
+          { status: 403 }
+        );
+      }
     }
 
     // Build update data
     const updateData: Record<string, string | undefined> = {};
     if (full_name !== undefined) updateData.full_name = full_name;
     if (phone !== undefined) updateData.phone = phone;
-    if (role !== undefined && currentUser?.role === 'manager') updateData.role = role;
+    if (role !== undefined && ADMIN_ROLES.includes(currentUserRole) && canAssignRole(currentUserRole, role)) {
+      updateData.role = role;
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updatedUser, error } = await (supabase
@@ -126,7 +182,7 @@ export async function DELETE(
       );
     }
 
-    // Check if current user is manager
+    // Check if current user is admin (super_admin or manager)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentUser } = await (supabase
       .from('users') as any)
@@ -134,9 +190,11 @@ export async function DELETE(
       .eq('id', authUser.id)
       .single();
 
-    if (currentUser?.role !== 'manager') {
+    const currentUserRole = currentUser?.role || '';
+
+    if (!ADMIN_ROLES.includes(currentUserRole)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only managers can delete users' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ მომხმარებლების წაშლა' } },
         { status: 403 }
       );
     }
@@ -144,16 +202,34 @@ export async function DELETE(
     // Can't delete yourself
     if (id === authUser.id) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Cannot delete yourself' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'საკუთარი თავის წაშლა შეუძლებელია' } },
         { status: 403 }
       );
     }
 
-    // Soft delete by setting deleted_at (if column exists) or deactivating
+    // Get target user's role to check permissions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: targetUser } = await (supabase
+      .from('users') as any)
+      .select('role')
+      .eq('id', id)
+      .single();
+
+    const targetUserRole = targetUser?.role || '';
+
+    // Check if current user can delete this user
+    if (!canManageUser(currentUserRole, targetUserRole)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ სუპერ ადმინს შეუძლია მენეჯერის წაშლა' } },
+        { status: 403 }
+      );
+    }
+
+    // Soft delete by deactivating and anonymizing
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase
       .from('users') as any)
-      .update({ role: 'user', full_name: '[წაშლილი მომხმარებელი]' })
+      .update({ is_active: false, full_name: '[წაშლილი მომხმარებელი]' })
       .eq('id', id);
 
     if (error) {
