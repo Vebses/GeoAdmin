@@ -14,7 +14,6 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
-    // Ensure React-PDF packages are handled correctly on the server
     serverComponentsExternalPackages: ['@react-pdf/renderer'],
   },
   // Webpack configuration for React-PDF

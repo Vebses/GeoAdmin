@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,7 +38,7 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
       }
 
       const response = await fetch(`/api/export/${entity}?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error('Export failed');
       }
@@ -48,7 +49,7 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
       }
 
       const result = await response.json();
-      
+
       if (!result.success || !result.data || result.data.length === 0) {
         toast.info('ექსპორტისთვის მონაცემები არ არის');
         return;
@@ -58,22 +59,47 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
       const filename = `${entity}_${new Date().toISOString().split('T')[0]}`;
 
       if (format === 'xlsx') {
-        // Create Excel file
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, entity === 'cases' ? 'Cases' : 'Invoices');
+        // Create Excel file with ExcelJS
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet(
+          entity === 'cases' ? 'Cases' : 'Invoices'
+        );
+
+        // Add headers
+        const headers = Object.keys(data[0]);
+        worksheet.addRow(headers);
+
+        // Style header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' },
+        };
+
+        // Add data rows
+        data.forEach((row: Record<string, unknown>) => {
+          worksheet.addRow(headers.map((h) => row[h] ?? ''));
+        });
 
         // Auto-size columns
-        const colWidths = Object.keys(data[0] || {}).map((key) => ({
-          wch: Math.max(
-            key.length,
-            ...data.map((row: Record<string, unknown>) => String(row[key] || '').length)
-          ),
-        }));
-        worksheet['!cols'] = colWidths;
+        worksheet.columns.forEach((column, index) => {
+          const header = headers[index];
+          let maxLength = header.length;
+          data.forEach((row: Record<string, unknown>) => {
+            const cellValue = String(row[header] ?? '');
+            maxLength = Math.max(maxLength, cellValue.length);
+          });
+          column.width = Math.min(maxLength + 2, 50); // Cap at 50
+        });
 
         // Generate and download
-        XLSX.writeFile(workbook, `${filename}.xlsx`);
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        saveAs(blob, `${filename}.xlsx`);
         toast.success('Excel ფაილი გადმოწერილია');
       } else {
         // Generate CSV
@@ -102,7 +128,7 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        
+
         toast.success('CSV ფაილი გადმოწერილია');
       }
     } catch (error) {
