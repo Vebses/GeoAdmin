@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Roles that can manage invitations
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 // DELETE - Cancel invitation (handles both old and new format)
 export async function DELETE(
   request: NextRequest,
@@ -10,7 +13,7 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Check if current user is a manager
+    // Check if current user is an admin
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json(
@@ -26,9 +29,9 @@ export async function DELETE(
       .eq('id', user.id)
       .single();
 
-    if (!userData || userData.role !== 'manager') {
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია მოწვევის გაუქმება' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ მოწვევის გაუქმება' } },
         { status: 403 }
       );
     }

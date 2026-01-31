@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import crypto from 'crypto';
 
+// Roles that can manage invitations
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,7 +26,7 @@ export async function POST(
       );
     }
 
-    // Check if user is manager
+    // Check if user is admin
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentUserData } = await (supabase
       .from('users') as any)
@@ -31,9 +34,9 @@ export async function POST(
       .eq('id', user.id)
       .single();
 
-    if (currentUserData && currentUserData.role !== 'manager') {
+    if (!currentUserData || !ADMIN_ROLES.includes(currentUserData.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია მოწვევის ხელახლა გაგზავნა' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ მოწვევის ხელახლა გაგზავნა' } },
         { status: 403 }
       );
     }

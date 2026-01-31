@@ -10,6 +10,7 @@ import { User, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, Shield } f
 import { cn } from '@/lib/utils/cn';
 
 const roleLabels: Record<string, string> = {
+  super_admin: 'სუპერ ადმინი',
   manager: 'მენეჯერი',
   assistant: 'ასისტენტი',
   accountant: 'ბუღალტერი',

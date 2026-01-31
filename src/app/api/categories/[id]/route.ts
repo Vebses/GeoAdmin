@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { categorySchema } from '@/lib/utils/validation';
 
+// Roles that can manage categories
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -19,16 +22,16 @@ export async function PUT(
       );
     }
 
-    // Check if user is manager
+    // Check if user is admin
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if ((profile as any)?.role !== 'manager') {
+    if (!profile || !ADMIN_ROLES.includes((profile as any)?.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ' } },
         { status: 403 }
       );
     }
@@ -103,16 +106,16 @@ export async function DELETE(
       );
     }
 
-    // Check if user is manager
+    // Check if user is admin
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if ((profile as any)?.role !== 'manager') {
+    if (!profile || !ADMIN_ROLES.includes((profile as any)?.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ' } },
         { status: 403 }
       );
     }

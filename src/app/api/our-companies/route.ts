@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
 import type { OurCompany } from '@/types';
 
+// Roles that can manage our companies
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -49,16 +52,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user is manager
+    // Check if user is admin
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if ((profile as any)?.role !== 'manager') {
+    if (!profile || !ADMIN_ROLES.includes((profile as any)?.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ მენეჯერს შეუძლია' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ' } },
         { status: 403 }
       );
     }

@@ -18,6 +18,7 @@ interface MobileNavProps {
 }
 
 const roleLabels: Record<string, string> = {
+  super_admin: 'სუპერ ადმინი',
   manager: 'მენეჯერი',
   assistant: 'ასისტენტი',
   accountant: 'ბუღალტერი',

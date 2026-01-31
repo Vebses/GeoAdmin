@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Roles that can manage trash
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 // POST /api/trash/empty - Empty all trash
 export async function POST() {
   try {
@@ -22,9 +25,9 @@ export async function POST() {
       .eq('id', user.id)
       .single();
 
-    if (!userData || !['admin', 'manager'].includes(userData.role)) {
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only managers can empty trash' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ ნაგვის დაცლა' } },
         { status: 403 }
       );
     }

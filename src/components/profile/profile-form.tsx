@@ -24,6 +24,7 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 const roleLabels: Record<string, string> = {
+  super_admin: 'სუპერ ადმინი',
   admin: 'ადმინისტრატორი',
   manager: 'მენეჯერი',
   assistant: 'ასისტენტი',

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Roles that can permanently delete
+const ADMIN_ROLES = ['super_admin', 'manager'];
+
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
@@ -44,9 +47,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('id', user.id)
       .single();
 
-    if (!userData || !['admin', 'manager'].includes(userData.role)) {
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only managers can permanently delete' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ სამუდამოდ წაშლა' } },
         { status: 403 }
       );
     }
