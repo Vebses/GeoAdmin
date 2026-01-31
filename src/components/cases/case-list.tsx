@@ -29,9 +29,23 @@ import type { CaseWithRelations, CaseFormData, CaseStatus } from '@/types';
 const ITEMS_PER_PAGE = 10;
 
 export function CaseList() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isLoading: authLoading } = useAuth();
   const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isAssistant = currentUser?.role === 'assistant';
+
+  // DEBUG: Remove after fixing
+  console.log('[CaseList Debug]', {
+    userId: currentUser?.id,
+    role: currentUser?.role,
+    isManager,
+    isAssistant,
+    authLoading,
+    roleCheck: {
+      isManagerRole: currentUser?.role === 'manager',
+      isAdminRole: currentUser?.role === 'admin',
+      isSuperAdminRole: currentUser?.role === 'super_admin',
+    }
+  });
 
   // Panel states
   const [viewingCase, setViewingCase] = useState<CaseWithRelations | null>(null);
