@@ -46,10 +46,10 @@ export function CaseEditPanel({
   currentUser,
 }: CaseEditPanelProps) {
   const isEdit = !!caseData;
-  const isManager = currentUser?.role === 'manager';
+  const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin';
   const isAssistant = currentUser?.role === 'assistant';
-  
-  const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager');
+
+  const assistants = users.filter(u => u.role === 'assistant' || u.role === 'manager' || u.role === 'admin');
   // Filter insurance partners by checking if their category name indicates insurance
   // Partners with category containing 'insurance', 'სადაზღვევო' (Georgian for insurance), or similar
   const insurancePartners = partners.filter(p => {

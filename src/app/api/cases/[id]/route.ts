@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const isCreator = existingCaseData.created_by === user.id;
     const isAssignedUser = existingCaseData.assigned_to === user.id;
 
-    if (userRole !== 'manager' && !isCreator && !isAssignedUser) {
+    if (userRole !== 'manager' && userRole !== 'admin' && !isCreator && !isAssignedUser) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება' } },
         { status: 403 }
@@ -146,9 +146,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const caseData = validationResult.data;
 
-    // IMPORTANT: Only managers can reassign cases
+    // IMPORTANT: Only managers/admins can reassign cases
     let newAssignedTo = caseData.assigned_to;
-    if (userRole !== 'manager') {
+    if (userRole !== 'manager' && userRole !== 'admin') {
       // Non-managers cannot reassign cases - keep original assignment
       newAssignedTo = existingCaseData.assigned_to || undefined;
     }
@@ -305,9 +305,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const existingCaseData = existingCase as { id: string; case_number: string; created_by: string | null };
 
-    // PERMISSION CHECK: Managers or case creators can delete
+    // PERMISSION CHECK: Managers/admins or case creators can delete
     const isCreator = existingCaseData.created_by === user.id;
-    if (userRole !== 'manager' && !isCreator) {
+    if (userRole !== 'manager' && userRole !== 'admin' && !isCreator) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის წაშლის უფლება' } },
         { status: 403 }
