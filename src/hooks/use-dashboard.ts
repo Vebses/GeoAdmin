@@ -73,6 +73,15 @@ export interface TeamMember {
   avgDays: number | null;
 }
 
+// Per-currency financial row for the table
+export interface CurrencyFinancialRow {
+  currency: CurrencyCode;
+  revenue: number;       // Paid in this period
+  outstanding: number;   // Unpaid total
+  invoiceCount: number;  // Total invoices in this currency
+  unpaidCount: number;   // Unpaid invoices count
+}
+
 // Enhanced stats types
 export interface EnhancedStats {
   operational: {
@@ -95,6 +104,7 @@ export interface EnhancedStats {
     overdueCount: number;
     avgCaseValue: CurrencyAmount[];
     collectionRate: number;
+    byCurrency: CurrencyFinancialRow[];
   };
 }
 

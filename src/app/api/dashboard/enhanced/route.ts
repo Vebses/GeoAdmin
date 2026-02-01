@@ -8,6 +8,15 @@ interface CurrencyAmount {
   amount: number;
 }
 
+// Per-currency financial breakdown
+interface CurrencyFinancialRow {
+  currency: CurrencyCode;
+  revenue: number;       // Paid in this period
+  outstanding: number;   // Unpaid total
+  invoiceCount: number;  // Total invoices in this currency
+  unpaidCount: number;   // Unpaid invoices count
+}
+
 interface EnhancedStatsResponse {
   operational: {
     totalCases: number;
@@ -20,8 +29,9 @@ interface EnhancedStatsResponse {
     unassignedCases: number;
   };
   financial: {
+    // Legacy format for backwards compatibility
     revenue: CurrencyAmount[];
-    revenueTotal: number; // For backwards compatibility and change calculation
+    revenueTotal: number;
     revenueChange: number;
     outstanding: CurrencyAmount[];
     outstandingTotal: number;
@@ -29,6 +39,8 @@ interface EnhancedStatsResponse {
     overdueCount: number;
     avgCaseValue: CurrencyAmount[];
     collectionRate: number;
+    // New: Per-currency breakdown table
+    byCurrency: CurrencyFinancialRow[];
   };
 }
 
@@ -224,6 +236,48 @@ export async function GET(request: NextRequest) {
       ? Math.round((allTimeRevenueGrouped.total / totalInvoiced) * 100)
       : 0;
 
+    // ============ PER-CURRENCY BREAKDOWN ============
+    // Get all invoices to calculate per-currency stats
+    interface AllInvoiceRow {
+      total: number | null;
+      paid_amount: number | null;
+      currency: CurrencyCode | null;
+      status: string | null;
+    }
+
+    const { data: allInvoicesData } = await supabase
+      .from('invoices')
+      .select('total, paid_amount, currency, status')
+      .is('deleted_at', null);
+
+    const allInvoices = (allInvoicesData || []) as AllInvoiceRow[];
+
+    const currencies: CurrencyCode[] = ['GEL', 'USD', 'EUR'];
+    const byCurrency: CurrencyFinancialRow[] = currencies.map(currency => {
+      const currencyInvoices = allInvoices.filter(
+        inv => (inv.currency || 'EUR') === currency
+      );
+      const paidInvoices = currencyInvoices.filter(inv => inv.status === 'paid');
+      const unpaidInvoices = currencyInvoices.filter(inv => inv.status === 'unpaid');
+
+      // Revenue from paid invoices in current period (already calculated above, but recalc per currency)
+      const periodPaidForCurrency = (paidData || []).filter(
+        inv => ((inv as InvoiceRow).currency || 'EUR') === currency
+      );
+      const periodRevenue = periodPaidForCurrency.reduce(
+        (sum, inv) => sum + ((inv as InvoiceRow).paid_amount || (inv as InvoiceRow).total || 0),
+        0
+      );
+
+      return {
+        currency,
+        revenue: periodRevenue,
+        outstanding: unpaidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0),
+        invoiceCount: currencyInvoices.length,
+        unpaidCount: unpaidInvoices.length,
+      };
+    }).filter(row => row.invoiceCount > 0 || row.revenue > 0 || row.outstanding > 0);
+
     // Calculate percentage changes
     const totalCasesChange = calculatePercentChange(totalCasesPrevious || 0, totalCases || 0);
     const activeCasesChange = calculatePercentChange(activeCasesPrevious || 0, activeCases || 0);
@@ -251,6 +305,7 @@ export async function GET(request: NextRequest) {
         overdueCount,
         avgCaseValue: avgCaseValueByCurrency,
         collectionRate,
+        byCurrency,
       },
     };
 
