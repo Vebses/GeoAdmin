@@ -35,18 +35,20 @@ interface FinancialCardProps {
 function CurrencyDisplay({
   amounts,
   loading,
-  colorClass = 'text-gray-900'
+  colorClass = 'text-gray-900',
+  emptyValue = '0 ₾'
 }: {
   amounts: CurrencyAmount[] | undefined;
   loading?: boolean;
   colorClass?: string;
+  emptyValue?: string;
 }) {
   if (loading) {
     return <div className="h-8 w-24 bg-gray-200 rounded" />;
   }
 
   if (!amounts || amounts.length === 0) {
-    return <span className={cn('text-2xl font-bold', colorClass)}>-</span>;
+    return <span className="text-2xl font-bold text-gray-400">{emptyValue}</span>;
   }
 
   // Single currency - display large
@@ -160,7 +162,8 @@ export function FinancialStats({ stats, loading }: FinancialStatsProps) {
             colorClass="text-green-600"
           />
         }
-        change={stats?.revenueChange}
+        subtitle={stats?.revenue && stats.revenue.length > 0 ? 'ამ პერიოდში' : undefined}
+        change={stats?.revenue && stats.revenue.length > 0 ? stats?.revenueChange : undefined}
         icon={<Banknote className="h-6 w-6" />}
         iconBgColor="bg-gradient-to-br from-green-100 to-green-50"
         iconColor="text-green-600"
@@ -196,7 +199,9 @@ export function FinancialStats({ stats, loading }: FinancialStatsProps) {
             colorClass="text-blue-600"
           />
         }
-        subtitle="საშუალო შემოსავალი ქეისზე"
+        subtitle={stats?.avgCaseValue && stats.avgCaseValue.length > 0
+          ? "საშუალო შემოსავალი ქეისზე"
+          : "დასრულებული ქეისები არ არის"}
         icon={<TrendingUp className="h-6 w-6" />}
         iconBgColor="bg-gradient-to-br from-blue-100 to-blue-50"
         iconColor="text-blue-600"
