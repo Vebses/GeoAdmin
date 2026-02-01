@@ -9,3 +9,4 @@ export { AlertsPanel } from './alerts-panel';
 export { TeamPerformance } from './team-performance';
 export { TeamWorkload } from './team-workload';
 export { FinancialStats } from './financial-stats';
+export { SectionHeader } from './section-header';

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+type CurrencyCode = 'GEL' | 'USD' | 'EUR';
+
+interface CurrencyAmount {
+  currency: CurrencyCode;
+  amount: number;
+}
+
 interface EnhancedStatsResponse {
   operational: {
     totalCases: number;
@@ -13,12 +20,14 @@ interface EnhancedStatsResponse {
     unassignedCases: number;
   };
   financial: {
-    revenue: number;
+    revenue: CurrencyAmount[];
+    revenueTotal: number; // For backwards compatibility and change calculation
     revenueChange: number;
-    outstanding: number;
+    outstanding: CurrencyAmount[];
+    outstandingTotal: number;
     outstandingCount: number;
     overdueCount: number;
-    avgCaseValue: number;
+    avgCaseValue: CurrencyAmount[];
     collectionRate: number;
   };
 }
@@ -26,7 +35,36 @@ interface EnhancedStatsResponse {
 interface InvoiceRow {
   total: number | null;
   paid_amount?: number | null;
+  currency?: CurrencyCode;
   created_at?: string;
+}
+
+// Group invoice amounts by currency
+function groupByCurrency(
+  data: InvoiceRow[] | null,
+  primaryField: 'paid_amount' | 'total'
+): { amounts: CurrencyAmount[]; total: number } {
+  if (!data || data.length === 0) {
+    return { amounts: [], total: 0 };
+  }
+
+  const grouped: Record<CurrencyCode, number> = { GEL: 0, USD: 0, EUR: 0 };
+  let total = 0;
+
+  for (const inv of data) {
+    const currency = (inv.currency || 'EUR') as CurrencyCode;
+    const amount = (primaryField === 'paid_amount' ? (inv.paid_amount || inv.total) : inv.total) || 0;
+    grouped[currency] += amount;
+    total += amount;
+  }
+
+  // Return only non-zero currencies, sorted by amount descending
+  const amounts = (Object.entries(grouped) as [CurrencyCode, number][])
+    .filter(([_, amount]) => amount > 0)
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return { amounts, total };
 }
 
 export async function GET(request: NextRequest) {
@@ -122,33 +160,33 @@ export async function GET(request: NextRequest) {
     // Revenue (paid invoices in current period)
     const { data: paidData } = await supabase
       .from('invoices')
-      .select('total, paid_amount')
+      .select('total, paid_amount, currency')
       .is('deleted_at', null)
       .eq('status', 'paid')
       .gte('paid_at', currentPeriodStart.toISOString());
 
-    const revenue = ((paidData || []) as InvoiceRow[]).reduce((sum, inv) => sum + (inv.paid_amount || inv.total || 0), 0);
+    const revenueGrouped = groupByCurrency(paidData as InvoiceRow[], 'paid_amount');
 
     // Revenue in previous period
     const { data: paidDataPrevious } = await supabase
       .from('invoices')
-      .select('total, paid_amount')
+      .select('total, paid_amount, currency')
       .is('deleted_at', null)
       .eq('status', 'paid')
       .gte('paid_at', previousPeriodStart.toISOString())
       .lt('paid_at', previousPeriodEnd.toISOString());
 
-    const revenuePrevious = ((paidDataPrevious || []) as InvoiceRow[]).reduce((sum, inv) => sum + (inv.paid_amount || inv.total || 0), 0);
+    const revenuePreviousGrouped = groupByCurrency(paidDataPrevious as InvoiceRow[], 'paid_amount');
 
     // Outstanding (unpaid invoices)
     const { data: unpaidData } = await supabase
       .from('invoices')
-      .select('total, created_at')
+      .select('total, currency, created_at')
       .is('deleted_at', null)
       .eq('status', 'unpaid');
 
     const unpaidTyped = (unpaidData || []) as InvoiceRow[];
-    const outstanding = unpaidTyped.reduce((sum, inv) => sum + (inv.total || 0), 0);
+    const outstandingGrouped = groupByCurrency(unpaidTyped, 'total');
     const outstandingCount = unpaidTyped.length;
 
     // Overdue invoices (unpaid > 30 days)
@@ -163,29 +201,34 @@ export async function GET(request: NextRequest) {
       .is('deleted_at', null)
       .eq('status', 'completed');
 
-    // Total revenue (all time)
+    // Total revenue (all time) - for avg case value calculation
     const { data: allPaidData } = await supabase
       .from('invoices')
-      .select('total, paid_amount')
+      .select('total, paid_amount, currency')
       .is('deleted_at', null)
       .eq('status', 'paid');
 
-    const totalRevenue = ((allPaidData || []) as InvoiceRow[]).reduce((sum, inv) => sum + (inv.paid_amount || inv.total || 0), 0);
-    const avgCaseValue = totalCompletedCases && totalCompletedCases > 0
-      ? Math.round(totalRevenue / totalCompletedCases)
-      : 0;
+    const allTimeRevenueGrouped = groupByCurrency(allPaidData as InvoiceRow[], 'paid_amount');
 
-    // Collection rate (paid / (paid + unpaid))
-    const totalInvoiced = totalRevenue + outstanding;
+    // Calculate avg case value per currency
+    const avgCaseValueByCurrency: CurrencyAmount[] = totalCompletedCases && totalCompletedCases > 0
+      ? allTimeRevenueGrouped.amounts.map(c => ({
+          currency: c.currency,
+          amount: Math.round(c.amount / totalCompletedCases)
+        }))
+      : [];
+
+    // Collection rate (paid / (paid + unpaid)) - using totals
+    const totalInvoiced = allTimeRevenueGrouped.total + outstandingGrouped.total;
     const collectionRate = totalInvoiced > 0
-      ? Math.round((totalRevenue / totalInvoiced) * 100)
+      ? Math.round((allTimeRevenueGrouped.total / totalInvoiced) * 100)
       : 0;
 
     // Calculate percentage changes
     const totalCasesChange = calculatePercentChange(totalCasesPrevious || 0, totalCases || 0);
     const activeCasesChange = calculatePercentChange(activeCasesPrevious || 0, activeCases || 0);
     const completedChange = calculatePercentChange(completedLastMonth || 0, completedThisMonth || 0);
-    const revenueChange = calculatePercentChange(revenuePrevious, revenue);
+    const revenueChange = calculatePercentChange(revenuePreviousGrouped.total, revenueGrouped.total);
 
     const stats: EnhancedStatsResponse = {
       operational: {
@@ -199,12 +242,14 @@ export async function GET(request: NextRequest) {
         unassignedCases: unassignedCases || 0,
       },
       financial: {
-        revenue,
+        revenue: revenueGrouped.amounts,
+        revenueTotal: revenueGrouped.total,
         revenueChange,
-        outstanding,
+        outstanding: outstandingGrouped.amounts,
+        outstandingTotal: outstandingGrouped.total,
         outstandingCount,
         overdueCount,
-        avgCaseValue,
+        avgCaseValue: avgCaseValueByCurrency,
         collectionRate,
       },
     };

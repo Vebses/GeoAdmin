@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+type CurrencyCode = 'GEL' | 'USD' | 'EUR';
+
+interface CurrencyAmount {
+  currency: CurrencyCode;
+  amount: number;
+}
+
 interface StatsResponse {
   totalCases: number;
   totalCasesChange: number;
@@ -10,6 +17,7 @@ interface StatsResponse {
   completedChange: number;
   unpaidInvoices: number;
   unpaidInvoicesAmount: number;
+  unpaidByCurrency: CurrencyAmount[];
 }
 
 export async function GET(request: NextRequest) {
@@ -82,16 +90,30 @@ export async function GET(request: NextRequest) {
       .gte('closed_at', lastMonthStart.toISOString())
       .lt('closed_at', lastMonthEnd.toISOString());
 
-    // Unpaid invoices
+    // Unpaid invoices with currency
     const { data: unpaidData } = await supabase
       .from('invoices')
-      .select('total')
+      .select('total, currency')
       .is('deleted_at', null)
       .eq('status', 'unpaid');
 
     const unpaidInvoices = unpaidData?.length || 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const unpaidInvoicesAmount = (unpaidData as any[])?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+
+    // Group by currency
+    const currencyTotals: Record<CurrencyCode, number> = { GEL: 0, USD: 0, EUR: 0 };
+    let unpaidInvoicesAmount = 0;
+
+    for (const inv of (unpaidData || []) as { total: number | null; currency?: CurrencyCode }[]) {
+      const amount = inv.total || 0;
+      const currency = (inv.currency || 'EUR') as CurrencyCode;
+      currencyTotals[currency] += amount;
+      unpaidInvoicesAmount += amount;
+    }
+
+    const unpaidByCurrency: CurrencyAmount[] = (Object.entries(currencyTotals) as [CurrencyCode, number][])
+      .filter(([_, amount]) => amount > 0)
+      .map(([currency, amount]) => ({ currency, amount }))
+      .sort((a, b) => b.amount - a.amount);
 
     // Calculate percentage changes
     const totalCasesChange = calculatePercentChange(totalCasesPrevious || 0, totalCases || 0);
@@ -107,6 +129,7 @@ export async function GET(request: NextRequest) {
       completedChange,
       unpaidInvoices,
       unpaidInvoicesAmount,
+      unpaidByCurrency,
     };
 
     return NextResponse.json({ success: true, data: stats });

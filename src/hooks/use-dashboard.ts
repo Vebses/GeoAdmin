@@ -2,6 +2,14 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+// Currency types
+export type CurrencyCode = 'GEL' | 'USD' | 'EUR';
+
+export interface CurrencyAmount {
+  currency: CurrencyCode;
+  amount: number;
+}
+
 // Types
 export interface DashboardStats {
   totalCases: number;
@@ -12,6 +20,7 @@ export interface DashboardStats {
   completedChange: number;
   unpaidInvoices: number;
   unpaidInvoicesAmount: number;
+  unpaidByCurrency: CurrencyAmount[];
 }
 
 export interface ChartDataPoint {
@@ -77,12 +86,14 @@ export interface EnhancedStats {
     unassignedCases: number;
   };
   financial: {
-    revenue: number;
+    revenue: CurrencyAmount[];
+    revenueTotal: number;
     revenueChange: number;
-    outstanding: number;
+    outstanding: CurrencyAmount[];
+    outstandingTotal: number;
     outstandingCount: number;
     overdueCount: number;
-    avgCaseValue: number;
+    avgCaseValue: CurrencyAmount[];
     collectionRate: number;
   };
 }

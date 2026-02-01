@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FileText, Activity, CheckCircle, Receipt } from 'lucide-react';
 import { StatCard } from './stat-card';
+import { formatCurrency } from '@/lib/utils/format';
 import type { DashboardStats } from '@/hooks/use-dashboard';
 
 interface StatsGridProps {
@@ -13,14 +14,26 @@ interface StatsGridProps {
 export function StatsGrid({ stats, loading = false }: StatsGridProps) {
   const router = useRouter();
 
-  // Format currency
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  // Format unpaid amounts - show multi-currency if available
+  const formatUnpaidValue = () => {
+    if (!stats) return '0';
+
+    const count = stats.unpaidInvoices || 0;
+
+    // Use multi-currency if available
+    if (stats.unpaidByCurrency && stats.unpaidByCurrency.length > 0) {
+      const currencyStrings = stats.unpaidByCurrency
+        .map(c => formatCurrency(c.amount, c.currency))
+        .join(' / ');
+      return `${count} (${currencyStrings})`;
+    }
+
+    // Fallback to single amount (for backwards compatibility)
+    if (stats.unpaidInvoicesAmount) {
+      return `${count} (${formatCurrency(stats.unpaidInvoicesAmount, 'EUR')})`;
+    }
+
+    return String(count);
   };
 
   return (
@@ -31,7 +44,7 @@ export function StatsGrid({ stats, loading = false }: StatsGridProps) {
         change={stats?.totalCasesChange}
         icon={FileText}
         iconColor="text-blue-600"
-        iconBgColor="bg-blue-100"
+        iconBgColor="bg-gradient-to-br from-blue-100 to-blue-50"
         onClick={() => router.push('/cases')}
         loading={loading}
       />
@@ -41,8 +54,8 @@ export function StatsGrid({ stats, loading = false }: StatsGridProps) {
         value={stats?.activeCases || 0}
         change={stats?.activeCasesChange}
         icon={Activity}
-        iconColor="text-yellow-600"
-        iconBgColor="bg-yellow-100"
+        iconColor="text-amber-600"
+        iconBgColor="bg-gradient-to-br from-amber-100 to-amber-50"
         onClick={() => router.push('/cases?status=in_progress')}
         loading={loading}
       />
@@ -54,17 +67,17 @@ export function StatsGrid({ stats, loading = false }: StatsGridProps) {
         change={stats?.completedChange}
         icon={CheckCircle}
         iconColor="text-green-600"
-        iconBgColor="bg-green-100"
+        iconBgColor="bg-gradient-to-br from-green-100 to-green-50"
         onClick={() => router.push('/cases?status=completed')}
         loading={loading}
       />
 
       <StatCard
         title="გადაუხდელი ინვოისები"
-        value={`${stats?.unpaidInvoices || 0} (${formatAmount(stats?.unpaidInvoicesAmount || 0)})`}
+        value={formatUnpaidValue()}
         icon={Receipt}
         iconColor="text-orange-600"
-        iconBgColor="bg-orange-100"
+        iconBgColor="bg-gradient-to-br from-orange-100 to-orange-50"
         onClick={() => router.push('/invoices?status=unpaid')}
         loading={loading}
       />
