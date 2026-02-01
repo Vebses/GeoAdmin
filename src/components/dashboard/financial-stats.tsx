@@ -168,8 +168,8 @@ export function FinancialStats({ stats, loading }: FinancialStatsProps) {
                 ვალუტა
               </th>
               <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-5 py-3">
-                შემოსავალი
-                <span className="block text-[10px] font-normal normal-case text-gray-400">ამ პერიოდში</span>
+                გადახდილი
+                <span className="block text-[10px] font-normal normal-case text-gray-400">სულ</span>
               </th>
               <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-5 py-3">
                 გადაუხდელი

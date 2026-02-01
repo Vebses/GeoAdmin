@@ -260,18 +260,15 @@ export async function GET(request: NextRequest) {
       const paidInvoices = currencyInvoices.filter(inv => inv.status === 'paid');
       const unpaidInvoices = currencyInvoices.filter(inv => inv.status === 'unpaid');
 
-      // Revenue from paid invoices in current period (already calculated above, but recalc per currency)
-      const periodPaidForCurrency = (paidData || []).filter(
-        inv => ((inv as InvoiceRow).currency || 'EUR') === currency
-      );
-      const periodRevenue = periodPaidForCurrency.reduce(
-        (sum, inv) => sum + ((inv as InvoiceRow).paid_amount || (inv as InvoiceRow).total || 0),
+      // Revenue = all-time paid amount for this currency (not period-limited)
+      const allTimeRevenue = paidInvoices.reduce(
+        (sum, inv) => sum + (inv.paid_amount || inv.total || 0),
         0
       );
 
       return {
         currency,
-        revenue: periodRevenue,
+        revenue: allTimeRevenue,
         outstanding: unpaidInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0),
         invoiceCount: currencyInvoices.length,
         unpaidCount: unpaidInvoices.length,
