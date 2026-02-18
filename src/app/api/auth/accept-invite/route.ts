@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createClient as createServerClient } from '@/lib/supabase/server';
 import { notifyUserRegistered } from '@/lib/notifications';
 import crypto from 'crypto';
 
@@ -49,7 +48,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerClient();
+    // Use admin client to bypass RLS - the person accepting the invite is not logged in
+    const adminClient = getAdminClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     let invitation: { id: string; email: string; role: string; expires_at: string; accepted_at?: string | null } | null = null;
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // FIRST: Try to find invitation in NEW user_invitations table
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newInvitation, error: newError } = await (supabase
+      const { data: newInvitation, error: newError } = await (adminClient
         .from('user_invitations') as any)
         .select('id, email, role, expires_at, accepted_at')
         .eq('invitation_token', tokenHash)
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     // SECOND: If not found, try OLD format in users table
     if (!invitation) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: oldInvitation, error: oldError } = await (supabase
+      const { data: oldInvitation, error: oldError } = await (adminClient
         .from('users') as any)
         .select('id, email, role, invitation_expires_at, invitation_token')
         .eq('invitation_token', tokenHash)
@@ -115,9 +115,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Create auth user using admin client
-    const adminClient = getAdminClient();
     
     const { data: authData, error: createAuthError } = await adminClient.auth.admin.createUser({
       email: invitation.email,
@@ -144,24 +141,24 @@ export async function POST(request: NextRequest) {
       
       // First, update the new user record created by trigger
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase
+      await (adminClient
         .from('users') as any)
         .update({
           full_name,
           role: invitation.role,
         })
         .eq('id', authData.user.id);
-      
+
       // Then, delete the old pending invitation record
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase
+      await (adminClient
         .from('users') as any)
         .delete()
         .eq('id', invitation.id);
     } else {
       // NEW FORMAT: Update user record created by trigger with role
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase
+      await (adminClient
         .from('users') as any)
         .update({
           full_name,
@@ -219,7 +216,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 
-    const supabase = await createServerClient();
+    // Use admin client to bypass RLS - the person validating the invite is not logged in
+    const adminClient = getAdminClient();
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     let invitation: { email: string; role: string; expires_at?: string; accepted_at?: string | null } | null = null;
@@ -227,7 +225,7 @@ export async function GET(request: NextRequest) {
     // FIRST: Try to find invitation in NEW user_invitations table
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newInvitation } = await (supabase
+      const { data: newInvitation } = await (adminClient
         .from('user_invitations') as any)
         .select('email, role, expires_at, accepted_at')
         .eq('invitation_token', tokenHash)
@@ -243,7 +241,7 @@ export async function GET(request: NextRequest) {
     // SECOND: If not found, try OLD format in users table
     if (!invitation) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: oldInvitation } = await (supabase
+      const { data: oldInvitation } = await (adminClient
         .from('users') as any)
         .select('email, role, invitation_expires_at, invitation_token')
         .eq('invitation_token', tokenHash)
