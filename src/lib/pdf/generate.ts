@@ -99,11 +99,14 @@ export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<B
   });
 
   // Render to buffer
-  const pdfBuffer = await renderToBuffer(pdfElement);
-
-  console.log('PDF generated, size:', pdfBuffer.length, 'bytes');
-
-  return Buffer.from(pdfBuffer);
+  try {
+    const pdfBuffer = await renderToBuffer(pdfElement);
+    console.log('PDF generated, size:', pdfBuffer.length, 'bytes');
+    return Buffer.from(pdfBuffer);
+  } catch (renderError) {
+    console.error('renderToBuffer failed:', renderError);
+    throw new Error(`PDF render failed: ${renderError instanceof Error ? renderError.message : 'Unknown render error'}`);
+  }
 }
 
 /**

@@ -1,8 +1,10 @@
--- Migration: Add atomic case number generation function
--- This prevents race conditions when multiple cases are created simultaneously
--- NOTE: Uses pg_advisory_xact_lock instead of FOR UPDATE (which doesn't work with aggregates)
+-- Migration: Fix case number generation - FOR UPDATE not allowed with aggregates
+-- Use advisory lock instead for atomic operation
+--
+-- Error that this fixes:
+--   code: '0A000'
+--   message: 'FOR UPDATE is not allowed with aggregate functions'
 
--- Generate next case number atomically
 CREATE OR REPLACE FUNCTION generate_case_number()
 RETURNS TEXT AS $$
 DECLARE
@@ -13,14 +15,13 @@ BEGIN
   -- Get current year
   v_current_year := TO_CHAR(NOW(), 'YYYY');
 
-  -- Advisory lock prevents race conditions (FOR UPDATE doesn't work with aggregates)
+  -- Advisory lock prevents race conditions without FOR UPDATE
+  -- hashtext creates a consistent lock key from the string
   PERFORM pg_advisory_xact_lock(hashtext('case_number_' || v_current_year));
 
   -- Get next sequence number for this year
   SELECT COALESCE(MAX(
-    CAST(
-      SUBSTRING(c.case_number FROM 10 FOR 4) AS INTEGER
-    )
+    CAST(SUBSTRING(c.case_number FROM 10 FOR 4) AS INTEGER)
   ), 0) + 1
   INTO v_next_sequence
   FROM cases c
@@ -33,10 +34,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Drop existing invoice function to allow parameter rename
-DROP FUNCTION IF EXISTS generate_invoice_number(UUID);
-
--- Update generate_invoice_number to use row-level locking for atomicity
+-- Also fix generate_invoice_number which has the same issue
 CREATE OR REPLACE FUNCTION generate_invoice_number(company_id UUID)
 RETURNS TEXT AS $$
 DECLARE
@@ -59,14 +57,12 @@ BEGIN
   -- Get current year-month
   v_year_month := TO_CHAR(NOW(), 'YYYYMM');
 
-  -- Advisory lock prevents race conditions (FOR UPDATE doesn't work with aggregates)
+  -- Advisory lock prevents race conditions
   PERFORM pg_advisory_xact_lock(hashtext('invoice_' || v_company_prefix || '_' || v_year_month));
 
   -- Get next sequence number
   SELECT COALESCE(MAX(
-    CAST(
-      SUBSTRING(i.invoice_number FROM LENGTH(v_company_prefix) + 9 FOR 4) AS INTEGER
-    )
+    CAST(SUBSTRING(i.invoice_number FROM LENGTH(v_company_prefix) + 9 FOR 4) AS INTEGER)
   ), 0) + 1
   INTO v_next_sequence
   FROM invoices i
@@ -79,9 +75,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execute permissions
+-- Grant execute permissions (already exist but ensure they're set)
 GRANT EXECUTE ON FUNCTION generate_case_number() TO authenticated;
 GRANT EXECUTE ON FUNCTION generate_invoice_number(UUID) TO authenticated;
-
--- Add comment for documentation
-COMMENT ON FUNCTION generate_case_number IS 'Generates the next case number atomically to prevent race conditions';

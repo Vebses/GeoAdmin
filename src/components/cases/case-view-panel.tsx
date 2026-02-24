@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CaseStatusBadge } from './case-status-badge';
 import { formatDate, formatCurrency } from '@/lib/utils/format';
+import { useAuth } from '@/hooks/use-auth';
+import { canViewFinancial } from '@/lib/constants/roles';
 import type { CaseWithRelations } from '@/types';
 
 interface CaseViewPanelProps {
@@ -39,6 +41,9 @@ export function CaseViewPanel({
   onEdit, 
   onDelete 
 }: CaseViewPanelProps) {
+  const { user } = useAuth();
+  const canSeeInvoices = canViewFinancial(user?.role);
+
   if (!caseData) return null;
 
   return (
@@ -235,7 +240,7 @@ export function CaseViewPanel({
               <div className="flex items-center justify-center gap-3 text-xs text-gray-600">
                 <span>{caseData.actions_count || 0} ქმედება</span>
                 <span>{caseData.documents_count || 0} დოკ.</span>
-                <span>{caseData.invoices_count || 0} ინვ.</span>
+                {canSeeInvoices && <span>{caseData.invoices_count || 0} ინვ.</span>}
               </div>
             </div>
           </div>

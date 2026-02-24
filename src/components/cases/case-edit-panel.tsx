@@ -76,6 +76,7 @@ export function CaseEditPanel({
   } = useForm<CaseFormData>({
     resolver: zodResolver(caseSchema),
     defaultValues: {
+      case_number: '',
       status: 'draft',
       priority: 'normal',
       patient_name: '',
@@ -405,7 +406,7 @@ export function CaseEditPanel({
                 <Label>პირადი ნომერი</Label>
                 <Input
                   {...register('patient_id')}
-                  placeholder="00000000000"
+                  placeholder="პირადი/საიდენტიფიკაციო ნომერი"
                   error={!!errors.patient_id}
                 />
                 {errors.patient_id && (

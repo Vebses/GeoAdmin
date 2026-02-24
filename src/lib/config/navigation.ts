@@ -56,6 +56,7 @@ export const mainNavItems: NavEntry[] = [
       key: 'unpaid_invoices_count',
       variant: 'warning',
     },
+    roles: ['super_admin', 'manager', 'accountant'],
   },
   {
     name: 'პარტნიორები',

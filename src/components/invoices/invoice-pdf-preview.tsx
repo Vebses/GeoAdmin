@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-  Download, 
-  Printer, 
-  ZoomIn, 
-  ZoomOut, 
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Download,
+  Printer,
+  ZoomIn,
+  ZoomOut,
   ExternalLink,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,8 +31,65 @@ export function InvoicePDFPreview({
   const [zoom, setZoom] = useState(100);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
   const pdfUrl = `/api/invoices/${invoiceId}/pdf`;
+
+  // Fetch PDF and validate response before showing in iframe
+  const fetchPdf = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setPdfBlobUrl(null);
+
+    try {
+      const response = await fetch(pdfUrl);
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!response.ok || !contentType.includes('application/pdf')) {
+        // Try to extract error message from HTML response
+        let errorMessage = 'PDF გენერაცია ვერ მოხერხდა';
+        try {
+          const text = await response.text();
+          // Extract error text from the HTML error page we return
+          const match = text.match(/<p[^>]*>([^<]+)<\/p>/);
+          if (match?.[1]) {
+            errorMessage += `: ${match[1]}`;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+        setError(errorMessage);
+        setLoading(false);
+        return;
+      }
+
+      // Create a blob URL from the PDF response
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setPdfBlobUrl(blobUrl);
+      setLoading(false);
+    } catch (err) {
+      console.error('PDF fetch error:', err);
+      setError('PDF ჩატვირთვა ვერ მოხერხდა. სერვერთან კავშირი შეუძლებელია.');
+      setLoading(false);
+    }
+  }, [pdfUrl]);
+
+  // Fetch PDF when dialog opens
+  useEffect(() => {
+    if (isOpen && invoiceId) {
+      fetchPdf();
+    }
+
+    // Cleanup blob URL when dialog closes or component unmounts
+    return () => {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+        setPdfBlobUrl(null);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, invoiceId]);
 
   const handleZoomIn = () => {
     setZoom((prev) => Math.min(prev + 25, 200));
@@ -151,38 +210,40 @@ export function InvoicePDFPreview({
             {error && (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center text-white">
-                  <p className="text-red-400 mb-2">PDF ჩატვირთვა ვერ მოხერხდა</p>
+                  <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+                  <p className="text-red-400 mb-1 font-medium">PDF ჩატვირთვა ვერ მოხერხდა</p>
+                  <p className="text-gray-400 text-sm mb-4 max-w-md">{error}</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      setError(null);
-                      setLoading(true);
-                    }}
+                    onClick={fetchPdf}
                   >
+                    <RefreshCw className="h-4 w-4 mr-1" />
                     ხელახლა ცდა
                   </Button>
                 </div>
               </div>
             )}
 
-            <iframe
-              src={pdfUrl}
-              className={cn(
-                'w-full bg-white shadow-2xl',
-                loading ? 'invisible h-0' : 'visible'
-              )}
-              style={{ 
-                minHeight: loading ? 0 : '842px',
-                aspectRatio: '1/1.414', // A4 ratio
-              }}
-              onLoad={() => setLoading(false)}
-              onError={() => {
-                setLoading(false);
-                setError('PDF ჩატვირთვა ვერ მოხერხდა');
-              }}
-            />
+            {pdfBlobUrl && (
+              <iframe
+                src={pdfBlobUrl}
+                className={cn(
+                  'w-full bg-white shadow-2xl',
+                  loading ? 'invisible h-0' : 'visible'
+                )}
+                style={{
+                  minHeight: loading ? 0 : '842px',
+                  aspectRatio: '1/1.414', // A4 ratio
+                }}
+                onLoad={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false);
+                  setError('PDF ჩატვირთვა ვერ მოხერხდა');
+                }}
+              />
+            )}
           </div>
         </div>
       </DialogContent>

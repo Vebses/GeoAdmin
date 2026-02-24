@@ -43,6 +43,7 @@ export function InvoiceCreateWizard({
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   
   // Step 2 state
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [currency, setCurrency] = useState<CurrencyCode>('EUR');
   const [language, setLanguage] = useState<InvoiceLanguage>('en');
   const [franchiseAmount, setFranchiseAmount] = useState<number>(0);
@@ -139,6 +140,7 @@ export function InvoiceCreateWizard({
       setSelectedCaseId(null);
       setSelectedRecipientId(null);
       setSelectedSenderId(null);
+      setInvoiceNumber('');
       setCurrency('EUR');
       setLanguage('en');
       setFranchiseAmount(0);
@@ -166,6 +168,7 @@ export function InvoiceCreateWizard({
     if (!canSave) return;
 
     const data: InvoiceFormData = {
+      invoice_number: invoiceNumber || undefined,
       case_id: selectedCaseId!,
       recipient_id: selectedRecipientId!,
       sender_id: selectedSenderId!,
@@ -259,6 +262,7 @@ export function InvoiceCreateWizard({
             />
           ) : (
             <InvoiceStepDetails
+              invoiceNumber={invoiceNumber}
               currency={currency}
               language={language}
               franchiseAmount={franchiseAmount}
@@ -277,6 +281,7 @@ export function InvoiceCreateWizard({
               selectedRecipient={selectedRecipient}
               selectedSender={selectedSender}
               // Callbacks
+              onInvoiceNumberChange={setInvoiceNumber}
               onCurrencyChange={setCurrency}
               onLanguageChange={setLanguage}
               onFranchiseAmountChange={setFranchiseAmount}

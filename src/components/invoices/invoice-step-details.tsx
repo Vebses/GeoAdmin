@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { InvoiceServicesEditor } from './invoice-services-editor';
-import { formatCurrency } from '@/lib/utils/format';
+import { formatCurrency, formatDate } from '@/lib/utils/format';
 import type { 
   CurrencyCode, 
   InvoiceLanguage, 
@@ -21,6 +21,7 @@ import type {
 } from '@/types';
 
 interface InvoiceStepDetailsProps {
+  invoiceNumber: string;
   currency: CurrencyCode;
   language: InvoiceLanguage;
   franchiseAmount: number;
@@ -39,6 +40,7 @@ interface InvoiceStepDetailsProps {
   selectedRecipient?: Partner | null;
   selectedSender?: OurCompany | null;
   // Callbacks
+  onInvoiceNumberChange: (invoiceNumber: string) => void;
   onCurrencyChange: (currency: CurrencyCode) => void;
   onLanguageChange: (language: InvoiceLanguage) => void;
   onFranchiseAmountChange: (franchiseAmount: number) => void;
@@ -97,6 +99,7 @@ ${senderName || 'GeoAdmin'}`
 };
 
 export function InvoiceStepDetails({
+  invoiceNumber,
   currency,
   language,
   franchiseAmount,
@@ -113,6 +116,7 @@ export function InvoiceStepDetails({
   selectedCase,
   selectedRecipient,
   selectedSender,
+  onInvoiceNumberChange,
   onCurrencyChange,
   onLanguageChange,
   onFranchiseAmountChange,
@@ -168,8 +172,13 @@ export function InvoiceStepDetails({
                 <p className="font-medium text-gray-900">{selectedSender?.name || '—'}</p>
               </div>
               <div>
-                <p className="text-gray-400 text-[10px]">ინვოისის ნომერი</p>
-                <p className="font-medium text-gray-900">ავტომატური</p>
+                <p className="text-gray-400 text-[10px]">ინვოისის ნომერი <span className="text-gray-300">(ოპციონალური)</span></p>
+                <Input
+                  value={invoiceNumber}
+                  onChange={(e) => onInvoiceNumberChange(e.target.value)}
+                  placeholder="ავტომატური"
+                  className="h-7 text-xs mt-0.5"
+                />
               </div>
             </div>
           </div>
@@ -368,7 +377,7 @@ export function InvoiceStepDetails({
                   </h2>
                   <p className="text-gray-600 mt-0.5">#INV-XXXXXX-XXXX</p>
                   <p className="text-gray-500 text-[9px] mt-0.5">
-                    {language === 'ka' ? 'თარიღი' : 'Date'}: {new Date().toLocaleDateString()}
+                    {language === 'ka' ? 'თარიღი' : 'Date'}: {formatDate(new Date())}
                   </p>
                   <p className="text-gray-500 text-[9px]">
                     {language === 'ka' ? 'ქეისი' : 'Case'}: {selectedCase?.case_number || '—'}
@@ -384,6 +393,10 @@ export function InvoiceStepDetails({
                   </p>
                   <p className="font-semibold text-gray-900 text-[10px]">{selectedRecipient?.legal_name || selectedRecipient?.name || '—'}</p>
                   {selectedRecipient?.id_code && <p className="text-gray-600 text-[10px]">ს/კ: {selectedRecipient.id_code}</p>}
+                  {selectedRecipient?.address && <p className="text-gray-600 text-[10px]">{selectedRecipient.address}</p>}
+                  {(selectedRecipient?.city || selectedRecipient?.country) && (
+                    <p className="text-gray-600 text-[10px]">{[selectedRecipient.city, selectedRecipient.country].filter(Boolean).join(', ')}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1">

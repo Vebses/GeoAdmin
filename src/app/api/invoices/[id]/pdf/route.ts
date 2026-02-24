@@ -92,16 +92,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return new NextResponse(new Uint8Array(pdfBuffer), { headers });
   } catch (error) {
     console.error('PDF generation error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: { 
-          code: 'SERVER_ERROR', 
-          message: 'PDF გენერაცია ვერ მოხერხდა',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        } 
-      },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Return HTML error page instead of JSON so the iframe/browser can display it
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>PDF Error</title></head>
+<body style="font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1f2937;color:#fff">
+<div style="text-align:center;max-width:500px;padding:20px">
+<div style="font-size:48px;margin-bottom:16px">&#9888;</div>
+<h2 style="color:#f87171;margin:0 0 8px">PDF გენერაცია ვერ მოხერხდა</h2>
+<p style="color:#9ca3af;font-size:14px">${errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+</div></body></html>`;
+    return new NextResponse(html, {
+      status: 500,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   }
 }

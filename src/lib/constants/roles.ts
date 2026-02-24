@@ -129,6 +129,6 @@ export function canBeAssignedCases(role: string | undefined | null): boolean {
  * Empty Trash              | ✓           | ✓       | ✗         | ✗
  * Permanent Delete         | ✓           | ✓       | ✗         | ✗
  * Create/Edit Cases        | ✓           | ✓       | ✓         | ✗
- * Create/Edit Invoices     | ✓           | ✓       | ✓         | ✓
+ * Create/Edit Invoices     | ✓           | ✓       | ✗         | ✓
  * Be Assigned Cases        | ✓           | ✓       | ✓         | ✗
  */

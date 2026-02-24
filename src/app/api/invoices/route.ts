@@ -15,6 +15,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check role - assistants cannot access invoices
+    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
+    if ((profile as { role: string } | null)?.role === 'assistant') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'წვდომა აკრძალულია' } },
+        { status: 403 }
+      );
+    }
+
     // Parse query params
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
@@ -109,6 +118,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check role - assistants cannot access invoices
+    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
+    if ((profile as { role: string } | null)?.role === 'assistant') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'წვდომა აკრძალულია' } },
+        { status: 403 }
+      );
+    }
+
     // Parse and validate request body
     let body;
     try {
@@ -142,16 +160,43 @@ export async function POST(request: Request) {
 
     const invoiceData = validationResult.data;
 
-    // Generate invoice number atomically using database function
-    const { data: invoiceNumberData, error: invoiceNumberError } = await supabase
-      .rpc('generate_invoice_number', { company_id: invoiceData.sender_id } as never);
+    // Use provided invoice number or generate one atomically
+    let invoiceNumber = invoiceData.invoice_number?.trim();
 
-    if (invoiceNumberError) {
-      console.error('Failed to generate invoice number:', invoiceNumberError);
-      throw new Error('Failed to generate invoice number');
+    if (!invoiceNumber) {
+      // Generate invoice number atomically using database function
+      const { data: invoiceNumberData, error: invoiceNumberError } = await supabase
+        .rpc('generate_invoice_number', { company_id: invoiceData.sender_id } as never);
+
+      if (invoiceNumberError) {
+        console.error('Failed to generate invoice number:', invoiceNumberError);
+        throw new Error('Failed to generate invoice number');
+      }
+
+      invoiceNumber = invoiceNumberData as string;
+    } else {
+      // Check if provided invoice number already exists
+      const { data: existingInvoice } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('invoice_number', invoiceNumber)
+        .is('deleted_at', null)
+        .single();
+
+      if (existingInvoice) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'DUPLICATE_INVOICE_NUMBER',
+              message: 'ინვოისის ნომერი უკვე გამოყენებულია',
+              details: { invoice_number: ['ეს ინვოისის ნომერი უკვე არსებობს'] }
+            }
+          },
+          { status: 400 }
+        );
+      }
     }
-
-    const invoiceNumber = invoiceNumberData as string;
 
     // Calculate totals
     const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);

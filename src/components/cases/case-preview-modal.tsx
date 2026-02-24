@@ -25,6 +25,8 @@ import { ServicesTab } from './case-preview/services-tab';
 import { DocumentsTab } from './case-preview/documents-tab';
 import { InvoicesTab } from './case-preview/invoices-tab';
 import { formatDate } from '@/lib/utils/format';
+import { useAuth } from '@/hooks/use-auth';
+import { canViewFinancial } from '@/lib/constants/roles';
 import type { CaseWithRelations } from '@/types';
 
 interface CasePreviewModalProps {
@@ -87,6 +89,9 @@ export function CasePreviewModal({
   onEdit,
   onDelete
 }: CasePreviewModalProps) {
+  const { user } = useAuth();
+  const canSeeInvoices = canViewFinancial(user?.role);
+
   if (!caseData) return null;
 
   const statusColors: Record<string, string> = {
@@ -216,15 +221,17 @@ export function CasePreviewModal({
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="invoices" className="gap-1.5">
-                <Receipt size={12} />
-                ინვოისები
-                {(caseData.invoices_count || 0) > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-600 text-[10px] font-medium rounded-full">
-                    {caseData.invoices_count}
-                  </span>
-                )}
-              </TabsTrigger>
+              {canSeeInvoices && (
+                <TabsTrigger value="invoices" className="gap-1.5">
+                  <Receipt size={12} />
+                  ინვოისები
+                  {(caseData.invoices_count || 0) > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-600 text-[10px] font-medium rounded-full">
+                      {caseData.invoices_count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -239,9 +246,11 @@ export function CasePreviewModal({
             <TabsContent value="documents" className="mt-0 animate-content-show">
               <DocumentsTab caseData={caseData} />
             </TabsContent>
-            <TabsContent value="invoices" className="mt-0 animate-content-show">
-              <InvoicesTab caseData={caseData} />
-            </TabsContent>
+            {canSeeInvoices && (
+              <TabsContent value="invoices" className="mt-0 animate-content-show">
+                <InvoicesTab caseData={caseData} />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
 

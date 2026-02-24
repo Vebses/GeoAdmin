@@ -208,7 +208,7 @@ export const caseSchema = z.object({
     .trim(),
   patient_id: z
     .string()
-    .regex(/^\d{11}$/, 'პირადი ნომერი უნდა იყოს 11 ციფრი')
+    .max(30, 'პირადი ნომერი ძალიან გრძელია')
     .optional()
     .nullable()
     .or(z.literal('')),
@@ -282,6 +282,11 @@ export const invoiceServiceSchema = z.object({
 });
 
 export const invoiceSchema = z.object({
+  invoice_number: z
+    .string()
+    .max(30, 'ინვოისის ნომერი ძალიან გრძელია')
+    .optional()
+    .or(z.literal('')),
   case_id: z.string().uuid('აირჩიეთ ქეისი'),
   recipient_id: z.string().uuid('აირჩიეთ მიმღები'),
   sender_id: z.string().uuid('აირჩიეთ გამგზავნი'),
