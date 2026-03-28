@@ -20,6 +20,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Check role - only admins can upload company images
+    const ADMIN_ROLES = ['super_admin', 'manager'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userData } = await (supabase
+      .from('users') as any)
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ სურათების ატვირთვა' } },
+        { status: 403 }
+      );
+    }
+
     // Check if company exists
     const { data: company, error: companyError } = await supabase
       .from('our_companies')
@@ -54,11 +70,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check file type
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    // Check file type (SVG removed — can contain embedded JavaScript/XSS)
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'მხოლოდ PNG, JPG, WebP და SVG ფაილები' } },
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'მხოლოდ PNG, JPG და WebP ფაილები' } },
+        { status: 400 }
+      );
+    }
+
+    // Validate file extension matches MIME type
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const validExtensions: Record<string, string[]> = {
+      'image/png': ['png'],
+      'image/jpeg': ['jpg', 'jpeg'],
+      'image/jpg': ['jpg', 'jpeg'],
+      'image/webp': ['webp'],
+    };
+    if (!fileExt || !validExtensions[file.type]?.includes(fileExt)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის გაფართოება არ ემთხვევა ტიპს' } },
         { status: 400 }
       );
     }

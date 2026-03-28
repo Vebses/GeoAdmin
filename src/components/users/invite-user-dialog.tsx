@@ -91,9 +91,17 @@ export function InviteUserDialog({ isOpen, onClose, onSuccess, currentUserRole }
         throw new Error(result.error?.message || 'მოწვევა ვერ მოხერხდა');
       }
 
-      toast.success('მოწვევა გაიგზავნა', {
-        description: `მოწვევა გაეგზავნა ${data.email}-ზე`,
-      });
+      // Show warning if email failed but invitation was created
+      if (result.warning) {
+        toast.warning('მოწვევა შეიქმნა', {
+          description: result.warning,
+          duration: 8000,
+        });
+      } else {
+        toast.success('მოწვევა გაიგზავნა', {
+          description: `მოწვევა გაეგზავნა ${data.email}-ზე`,
+        });
+      }
 
       reset();
       onClose();

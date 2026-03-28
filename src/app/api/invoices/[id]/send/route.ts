@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateInvoicePDF } from '@/lib/pdf';
 import { sendInvoiceEmail, isValidEmail } from '@/lib/email';
+import { requireAuth, isAuthError, FINANCE_ROLES } from '@/lib/auth-utils';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface RouteParams {
@@ -30,16 +31,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body: SendRequest = await request.json();
+
+    // Only admins and accountants can send invoices
+    const auth = await requireAuth(FINANCE_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
-        { status: 401 }
-      );
-    }
 
     // Get invoice with all relations (exclude soft-deleted)
     const { data: invoice, error: invoiceError } = await supabase
@@ -184,7 +181,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from('invoice_sends') as any).insert({
         invoice_id: id,
-        sent_by: user.id,
+        sent_by: auth.user.id,
         email: recipientEmail,
         cc_emails: validatedCCEmails,
         subject: body.subject || typedInvoice.email_subject || '',
@@ -206,7 +203,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .from('invoice_sends') as any)
       .insert({
         invoice_id: id,
-        sent_by: user.id,
+        sent_by: auth.user.id,
         email: recipientEmail,
         cc_emails: validatedCCEmails,
         subject: body.subject || typedInvoice.email_subject || '',

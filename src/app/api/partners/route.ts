@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 import type { Partner } from '@/types';
 
 export async function GET(request: Request) {
@@ -78,16 +79,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Only admins can create partners
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
-        { status: 401 }
-      );
-    }
 
     // Parse and validate request body
     const body = await request.json();

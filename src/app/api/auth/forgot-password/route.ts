@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendPasswordResetEmail } from '@/lib/email/auth';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 reset requests per 15 minutes per IP
+    const ip = getClientIp(request);
+    const rateCheck = checkRateLimit(`reset:${ip}`, { limit: 5, windowSec: 900 });
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { error: 'ძალიან ბევრი მოთხოვნა. სცადეთ მოგვიანებით.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { email } = body;
 
@@ -52,10 +63,23 @@ export async function POST(request: NextRequest) {
 
     // Send styled email
     const result = await sendPasswordResetEmail(email, resetUrl);
-    
+
     if (!result.success) {
       console.error('Failed to send password reset email:', result.error);
-      // Still return success to prevent enumeration
+      // Clear the token since email wasn't sent
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase
+        .from('users') as any)
+        .update({
+          reset_token: null,
+          reset_token_expires_at: null,
+        })
+        .eq('id', user.id);
+
+      return NextResponse.json(
+        { success: false, error: { code: 'EMAIL_FAILED', message: 'ელ-ფოსტის გაგზავნა ვერ მოხერხდა. სცადეთ მოგვიანებით.' } },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true });

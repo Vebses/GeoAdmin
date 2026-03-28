@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
 export async function GET(
   request: Request,
@@ -53,15 +54,12 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+
+    // Only admins can update partners
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
-        { status: 401 }
-      );
-    }
 
     const body = await request.json();
     const validationResult = partnerSchema.safeParse(body);
@@ -111,15 +109,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    // Only admins can delete partners
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
-        { status: 401 }
-      );
-    }
 
     // Soft delete
     const { error } = await (supabase

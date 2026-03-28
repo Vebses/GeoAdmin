@@ -119,6 +119,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Validate file type — only allow safe document and image types
+    const ALLOWED_MIME_TYPES = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'text/plain',
+    ];
+    const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'webp', 'txt'];
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის ტიპი დაუშვებელია. დაშვებულია: PDF, Word, Excel, სურათები' } },
+        { status: 400 }
+      );
+    }
+    if (!fileExt || !ALLOWED_EXTENSIONS.includes(fileExt)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის გაფართოება დაუშვებელია' } },
+        { status: 400 }
+      );
+    }
+
     // Check file size (10MB max)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {

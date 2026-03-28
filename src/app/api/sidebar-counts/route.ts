@@ -14,40 +14,38 @@ export async function GET() {
       );
     }
 
-    // Get active cases count (not completed or cancelled)
+    // Run all count queries in parallel for performance
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: activeCases } = await (supabase
-      .from('cases') as any)
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .not('status', 'in', '("completed","cancelled")');
-
-    // Get unpaid invoices count
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: unpaidInvoices } = await (supabase
-      .from('invoices') as any)
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .in('status', ['draft', 'unpaid']);
-
-    // Get trashed items count
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: trashedCases } = await (supabase
-      .from('cases') as any)
-      .select('*', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: trashedInvoices } = await (supabase
-      .from('invoices') as any)
-      .select('*', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: trashedPartners } = await (supabase
-      .from('partners') as any)
-      .select('*', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null);
+    const [
+      { count: activeCases },
+      { count: unpaidInvoices },
+      { count: trashedCases },
+      { count: trashedInvoices },
+      { count: trashedPartners },
+    ] = await Promise.all([
+      // Active cases (not completed or cancelled)
+      (supabase.from('cases') as any)
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .not('status', 'in', '("completed","cancelled")'),
+      // Unpaid invoices
+      (supabase.from('invoices') as any)
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .in('status', ['draft', 'unpaid']),
+      // Trashed cases
+      (supabase.from('cases') as any)
+        .select('*', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null),
+      // Trashed invoices
+      (supabase.from('invoices') as any)
+        .select('*', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null),
+      // Trashed partners
+      (supabase.from('partners') as any)
+        .select('*', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null),
+    ]);
 
     const trashedItems = (trashedCases || 0) + (trashedInvoices || 0) + (trashedPartners || 0);
 

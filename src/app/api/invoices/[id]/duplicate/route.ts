@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError, FINANCE_ROLES } from '@/lib/auth-utils';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -35,16 +36,12 @@ interface InvoiceData {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
+
+    // Only admins and accountants can duplicate invoices
+    const auth = await requireAuth(FINANCE_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
-        { status: 401 }
-      );
-    }
 
     // Get original invoice with services
     const { data: originalInvoice, error: fetchError } = await supabase
@@ -97,7 +94,7 @@ export async function POST(request: Request, context: RouteContext) {
       attach_original_docs: invoice.attach_original_docs,
       attach_medical_docs: invoice.attach_medical_docs,
       notes: `დუბლირებული ინვოისიდან: ${invoice.invoice_number}`,
-      created_by: user.id,
+      created_by: auth.user.id,
     };
 
     const { data: newInvoice, error: insertError } = await supabase

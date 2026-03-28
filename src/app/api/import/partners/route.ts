@@ -21,16 +21,34 @@ interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
+const ADMIN_ROLES = ['super_admin', 'manager'];
+const MAX_IMPORT_ROWS = 1000;
+
 // POST /api/import/partners - Import partners from CSV data
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Check role - only admins can import
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userData } = await (supabase
+      .from('users') as any)
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || !ADMIN_ROLES.includes(userData.role)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ იმპორტი' } },
+        { status: 403 }
       );
     }
 
@@ -40,6 +58,23 @@ export async function POST(request: NextRequest) {
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'No data to import' } },
+        { status: 400 }
+      );
+    }
+
+    // Enforce row limit
+    if (rows.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: `მაქსიმუმ ${MAX_IMPORT_ROWS} ჩანაწერის იმპორტი შეიძლება ერთდროულად` } },
+        { status: 400 }
+      );
+    }
+
+    // Validate categoryId as UUID if provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (categoryId && !uuidRegex.test(categoryId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'არასწორი კატეგორიის ID' } },
         { status: 400 }
       );
     }

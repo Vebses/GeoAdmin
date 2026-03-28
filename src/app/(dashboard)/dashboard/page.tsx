@@ -85,15 +85,22 @@ export default function DashboardPage() {
   const canSeeFinancial = canViewFinancial(user?.role);
   const canSeeTeam = canViewTeam(user?.role);
 
-  // Fetch data
-  const { data: stats, isLoading: statsLoading } = useDashboardStats(period);
-  const { data: charts, isLoading: chartsLoading } = useDashboardCharts(period);
-  const { data: activities, isLoading: activityLoading, refetch: refetchActivity } = useDashboardActivity(10);
+  // Fetch data (null → undefined for components that expect optional props)
+  const { data: rawStats, isLoading: statsLoading } = useDashboardStats(period);
+  const { data: rawCharts, isLoading: chartsLoading } = useDashboardCharts(period);
+  const { data: rawActivities, isLoading: activityLoading, refetch: refetchActivity } = useDashboardActivity(10);
 
   // Enhanced data
-  const { data: enhancedStats, isLoading: enhancedLoading } = useEnhancedStats(period);
-  const { data: alerts, isLoading: alertsLoading } = useDashboardAlerts();
+  const { data: rawEnhancedStats, isLoading: enhancedLoading } = useEnhancedStats(period);
+  const { data: rawAlerts, isLoading: alertsLoading } = useDashboardAlerts();
   const { data: teamData, isLoading: teamLoading } = useTeamPerformance(period);
+
+  // Convert null to undefined (API returns null for 403/forbidden)
+  const stats = rawStats ?? undefined;
+  const charts = rawCharts ?? undefined;
+  const activities = rawActivities ?? undefined;
+  const enhancedStats = rawEnhancedStats ?? undefined;
+  const alerts = rawAlerts ?? undefined;
 
   // Enable realtime updates
   useRealtimeDashboard();

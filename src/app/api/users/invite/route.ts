@@ -138,7 +138,15 @@ export async function POST(request: NextRequest) {
 
     if (!result.success) {
       console.error('Failed to send invitation email:', result.error);
-      // Don't fail the request, just log the error
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: newInvite.id,
+          email: newInvite.email,
+          role: newInvite.role,
+        },
+        warning: 'მოწვევა შეიქმნა, მაგრამ ელ-ფოსტის გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა გაგზავნა.',
+      });
     }
 
     return NextResponse.json({

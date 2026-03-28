@@ -43,7 +43,9 @@ export function ForgotPasswordForm() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'მოთხოვნა ვერ შესრულდა');
+        // Handle structured error from API
+        const errorMessage = result.error?.message || result.error || 'მოთხოვნა ვერ შესრულდა';
+        throw new Error(errorMessage);
       }
 
       setSuccess(true);

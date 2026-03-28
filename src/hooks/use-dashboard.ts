@@ -134,47 +134,38 @@ export interface TeamData {
   members: TeamMember[];
 }
 
+// Helper: fetch with 403 handling — returns null instead of throwing for forbidden
+async function fetchDashboard<T>(url: string): Promise<T | null> {
+  const response = await fetch(url);
+  if (response.status === 403) return null; // Non-admin — silently return null
+  const result = await response.json();
+  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch data');
+  return result.data;
+}
+
 // Fetch functions
-async function fetchStats(period: string): Promise<DashboardStats> {
-  const response = await fetch(`/api/dashboard/stats?period=${period}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch stats');
-  return result.data;
+async function fetchStats(period: string): Promise<DashboardStats | null> {
+  return fetchDashboard<DashboardStats>(`/api/dashboard/stats?period=${period}`);
 }
 
-async function fetchCharts(period: string): Promise<ChartsData> {
-  const response = await fetch(`/api/dashboard/charts?period=${period}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch charts');
-  return result.data;
+async function fetchCharts(period: string): Promise<ChartsData | null> {
+  return fetchDashboard<ChartsData>(`/api/dashboard/charts?period=${period}`);
 }
 
-async function fetchActivity(limit: number = 10): Promise<ActivityItem[]> {
-  const response = await fetch(`/api/dashboard/activity?limit=${limit}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch activity');
-  return result.data;
+async function fetchActivity(limit: number = 10): Promise<ActivityItem[] | null> {
+  return fetchDashboard<ActivityItem[]>(`/api/dashboard/activity?limit=${limit}`);
 }
 
-async function fetchEnhancedStats(period: string): Promise<EnhancedStats> {
-  const response = await fetch(`/api/dashboard/enhanced?period=${period}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch enhanced stats');
-  return result.data;
+async function fetchEnhancedStats(period: string): Promise<EnhancedStats | null> {
+  return fetchDashboard<EnhancedStats>(`/api/dashboard/enhanced?period=${period}`);
 }
 
-async function fetchAlerts(): Promise<DashboardAlerts> {
-  const response = await fetch('/api/dashboard/alerts');
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch alerts');
-  return result.data;
+async function fetchAlerts(): Promise<DashboardAlerts | null> {
+  return fetchDashboard<DashboardAlerts>('/api/dashboard/alerts');
 }
 
-async function fetchTeam(period: string): Promise<TeamData> {
-  const response = await fetch(`/api/dashboard/team?period=${period}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error?.message || 'Failed to fetch team data');
-  return result.data;
+async function fetchTeam(period: string): Promise<TeamData | null> {
+  return fetchDashboard<TeamData>(`/api/dashboard/team?period=${period}`);
 }
 
 // Hooks

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
 interface AlertItem {
   id: string;
@@ -39,47 +40,46 @@ interface InvoiceRow {
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
 
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
-    }
+    const supabase = await createClient();
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    // Delayed cases (status = 'delayed')
-    const { data: delayedCases, count: delayedCount } = await supabase
-      .from('cases')
-      .select('id, case_number, patient_name', { count: 'exact' })
-      .is('deleted_at', null)
-      .eq('status', 'delayed')
-      .order('opened_at', { ascending: false })
-      .limit(5);
-
-    // Overdue invoices (unpaid > 30 days)
-    const { data: overdueInvoices, count: overdueCount } = await supabase
-      .from('invoices')
-      .select('id, invoice_number, total, currency, created_at', { count: 'exact' })
-      .is('deleted_at', null)
-      .eq('status', 'unpaid')
-      .lt('created_at', thirtyDaysAgo.toISOString())
-      .order('created_at', { ascending: true })
-      .limit(5);
-
-    // Unassigned cases (no assigned_to, in active status)
-    const { data: unassignedCases, count: unassignedCount } = await supabase
-      .from('cases')
-      .select('id, case_number, patient_name', { count: 'exact' })
-      .is('deleted_at', null)
-      .is('assigned_to', null)
-      .in('status', ['draft', 'in_progress'])
-      .order('opened_at', { ascending: false })
-      .limit(5);
+    // Run all alert queries in parallel
+    const [
+      { data: delayedCases, count: delayedCount },
+      { data: overdueInvoices, count: overdueCount },
+      { data: unassignedCases, count: unassignedCount },
+    ] = await Promise.all([
+      // Delayed cases
+      supabase
+        .from('cases')
+        .select('id, case_number, patient_name', { count: 'exact' })
+        .is('deleted_at', null)
+        .eq('status', 'delayed')
+        .order('opened_at', { ascending: false })
+        .limit(5),
+      // Overdue invoices (unpaid > 30 days)
+      supabase
+        .from('invoices')
+        .select('id, invoice_number, total, currency, created_at', { count: 'exact' })
+        .is('deleted_at', null)
+        .eq('status', 'unpaid')
+        .lt('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: true })
+        .limit(5),
+      // Unassigned cases
+      supabase
+        .from('cases')
+        .select('id, case_number, patient_name', { count: 'exact' })
+        .is('deleted_at', null)
+        .is('assigned_to', null)
+        .in('status', ['draft', 'in_progress'])
+        .order('opened_at', { ascending: false })
+        .limit(5),
+    ]);
 
     const alerts: AlertsResponse = {
       delayed: {

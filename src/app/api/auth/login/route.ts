@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import type { User } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 login attempts per minute per IP
+    const ip = getClientIp(request);
+    const rateCheck = checkRateLimit(`login:${ip}`, { limit: 10, windowSec: 60 });
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { error: 'ძალიან ბევრი მოთხოვნა. სცადეთ მოგვიანებით.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { email, password } = body;
 

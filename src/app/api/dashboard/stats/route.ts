@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
 type CurrencyCode = 'GEL' | 'USD' | 'EUR';
 
@@ -22,80 +23,79 @@ interface StatsResponse {
 
 export async function GET(request: NextRequest) {
   try {
+    // Only admins can view dashboard stats
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'month';
-    
+
     const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
-    }
 
     // Calculate date ranges
     const now = new Date();
     const currentPeriodStart = getPeriodStart(now, period);
-    const previousPeriodStart = getPreviousPeriodStart(now, period);
     const previousPeriodEnd = currentPeriodStart;
-
-    // Total Cases
-    const { count: totalCases } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null);
-
-    // Total Cases in previous period
-    const { count: totalCasesPrevious } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .lt('created_at', previousPeriodEnd.toISOString());
-
-    // Active Cases (draft, in_progress, paused, delayed)
-    const { count: activeCases } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .in('status', ['draft', 'in_progress', 'paused', 'delayed']);
-
-    // Active Cases in previous period
-    const { count: activeCasesPrevious } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .in('status', ['draft', 'in_progress', 'paused', 'delayed'])
-      .lt('created_at', previousPeriodEnd.toISOString());
-
-    // Completed this month
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const { count: completedThisMonth } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .eq('status', 'completed')
-      .gte('closed_at', monthStart.toISOString());
-
-    // Completed last month (for comparison)
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = monthStart;
-    const { count: completedLastMonth } = await supabase
-      .from('cases')
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .eq('status', 'completed')
-      .gte('closed_at', lastMonthStart.toISOString())
-      .lt('closed_at', lastMonthEnd.toISOString());
 
-    // Unpaid invoices with currency
-    const { data: unpaidData } = await supabase
-      .from('invoices')
-      .select('total, currency')
-      .is('deleted_at', null)
-      .eq('status', 'unpaid');
+    // Run all queries in parallel for performance
+    const [
+      { count: totalCases },
+      { count: totalCasesPrevious },
+      { count: activeCases },
+      { count: activeCasesPrevious },
+      { count: completedThisMonth },
+      { count: completedLastMonth },
+      { data: unpaidData },
+    ] = await Promise.all([
+      // Total Cases
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null),
+      // Total Cases in previous period
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .lt('created_at', previousPeriodEnd.toISOString()),
+      // Active Cases
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .in('status', ['draft', 'in_progress', 'paused', 'delayed']),
+      // Active Cases in previous period
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .in('status', ['draft', 'in_progress', 'paused', 'delayed'])
+        .lt('created_at', previousPeriodEnd.toISOString()),
+      // Completed this month
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .eq('status', 'completed')
+        .gte('closed_at', monthStart.toISOString()),
+      // Completed last month
+      supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .eq('status', 'completed')
+        .gte('closed_at', lastMonthStart.toISOString())
+        .lt('closed_at', lastMonthEnd.toISOString()),
+      // Unpaid invoices with currency
+      supabase
+        .from('invoices')
+        .select('total, currency')
+        .is('deleted_at', null)
+        .eq('status', 'unpaid'),
+    ]);
 
     const unpaidInvoices = unpaidData?.length || 0;
 

@@ -8,6 +8,21 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+// Valid case status transitions
+const VALID_CASE_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['in_progress', 'cancelled'],
+  in_progress: ['paused', 'delayed', 'completed', 'cancelled'],
+  paused: ['in_progress', 'cancelled'],
+  delayed: ['in_progress', 'cancelled'],
+  completed: [], // No transitions from completed
+  cancelled: ['draft'], // Can revert to draft
+};
+
+function isValidCaseStatusTransition(current: string, next: string): boolean {
+  if (current === next) return true;
+  return (VALID_CASE_STATUS_TRANSITIONS[current] || []).includes(next);
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
@@ -168,6 +183,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const caseData = validationResult.data;
+
+    // Validate case status transition
+    if (caseData.status && caseData.status !== existingCaseData.status) {
+      if (!isValidCaseStatusTransition(existingCaseData.status, caseData.status)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'INVALID_STATUS_TRANSITION',
+              message: `სტატუსის ცვლილება '${existingCaseData.status}' → '${caseData.status}' დაუშვებელია`
+            }
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     // IMPORTANT: Only managers/admins/super_admins can reassign cases
     let newAssignedTo = caseData.assigned_to;

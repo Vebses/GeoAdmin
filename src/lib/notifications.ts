@@ -295,11 +295,11 @@ export async function notifyCaseStatusChanged(
   changedById: string,
 ): Promise<void> {
   const statusLabels: Record<string, string> = {
-    draft: 'მიმდინარე',
-    in_progress: 'შეჩერებული',
-    paused: 'შეფერხებული',
-    delayed: 'დასრულებული',
-    completed: 'გაუქმებული',
+    draft: 'დრაფტი',
+    in_progress: 'მიმდინარე',
+    paused: 'შეჩერებული',
+    delayed: 'შეფერხებული',
+    completed: 'დასრულებული',
     cancelled: 'გაუქმებული',
   };
   

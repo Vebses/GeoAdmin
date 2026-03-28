@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
 // GET /api/export/invoices - Export invoices as CSV or JSON
 export async function GET(request: NextRequest) {
   try {
+    // Only admins can export data
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') || 'csv';
     const status = searchParams.get('status');
-    
+
     const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
-    }
 
     // Build query - simpler without relations
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +25,9 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('status', status);
     }
+
+    // Limit export to prevent memory issues
+    query = query.limit(10000);
 
     const { data: invoices, error } = await query;
 

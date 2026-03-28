@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
 interface ChartDataPoint {
   date: string;
@@ -21,19 +22,13 @@ interface ChartsResponse {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(ADMIN_ROLES);
+    if (isAuthError(auth)) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'month';
-    
+
     const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
-    }
 
     // Get date range and grouping
     const { startDate, groupBy, labels } = getDateRangeConfig(period);
