@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
 import { InvoiceServicesEditor } from './invoice-services-editor';
 import { InvoiceStatusBadge } from './invoice-status-badge';
 import type { 
@@ -232,18 +233,12 @@ export function InvoiceEditPanel({
 
             <div className="space-y-2">
               <Label className="text-xs">მიმღები კომპანია</Label>
-              <Select value={recipientId || ''} onValueChange={setRecipientId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="აირჩიეთ..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {partners.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id} className="text-xs">
-                      {partner.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PartnerCombobox
+                value={recipientId || null}
+                onChange={(id) => setRecipientId(id || '')}
+                placeholder="აირჩიეთ..."
+                className="h-9"
+              />
             </div>
           </div>
 

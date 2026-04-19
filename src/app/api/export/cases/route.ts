@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
+// dd/MM/yyyy formatter (consistent across app)
+function formatExportDate(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()}`;
+}
+
+function formatExportDateTime(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()} ${hh}:${mm}`;
+}
+
 // GET /api/export/cases - Export cases with related data (actions, documents, invoices)
 export async function GET(request: NextRequest) {
   try {
@@ -273,11 +294,11 @@ export async function GET(request: NextRequest) {
       'პასუხისმგებელი': userMap.get(c.assigned_to) || '',
       'სამედიცინო': c.is_medical ? 'დიახ' : 'არა',
       'დოკუმენტირებული': c.is_documented ? 'დიახ' : 'არა',
-      'გახსნის თარიღი': c.opened_at ? new Date(c.opened_at).toLocaleDateString('ka-GE') : '',
-      'დახურვის თარიღი': c.closed_at ? new Date(c.closed_at).toLocaleDateString('ka-GE') : '',
+      'გახსნის თარიღი': c.opened_at ? formatExportDate(c.opened_at) : '',
+      'დახურვის თარიღი': c.closed_at ? formatExportDate(c.closed_at) : '',
       'მომსახურების ღირებულება': c.total_service_cost?.toFixed(2) || '0.00',
       'ასისტანსის ღირებულება': c.total_assistance_cost?.toFixed(2) || '0.00',
-      'შექმნის თარიღი': c.created_at ? new Date(c.created_at).toLocaleString('ka-GE') : '',
+      'შექმნის თარიღი': c.created_at ? formatExportDateTime(c.created_at) : '',
     }));
 
     const headers = Object.keys(simpleCases[0]);

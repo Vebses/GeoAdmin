@@ -4,6 +4,7 @@ import { Search, X, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
 import { cn } from '@/lib/utils/cn';
 import { invoiceStatusOptions } from './invoice-status-badge';
 import type { InvoiceStatus, CurrencyCode, Partner, OurCompany } from '@/types';
@@ -124,23 +125,15 @@ export function InvoiceFilters({
           </SelectContent>
         </Select>
 
-        {/* Recipient Filter */}
-        <Select
-          value={filters.recipient_id || '__all__'}
-          onValueChange={(value) => onFiltersChange({ ...filters, recipient_id: value === '__all__' ? null : value })}
-        >
-          <SelectTrigger className="w-[180px] h-9 text-xs">
-            <SelectValue placeholder="მიმღები" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__" className="text-xs">ყველა მიმღები</SelectItem>
-            {recipients.map((recipient) => (
-              <SelectItem key={recipient.id} value={recipient.id} className="text-xs">
-                {recipient.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Recipient Filter — ajax search */}
+        <div className="w-[180px]">
+          <PartnerCombobox
+            value={filters.recipient_id || null}
+            onChange={(id) => onFiltersChange({ ...filters, recipient_id: id })}
+            placeholder="მიმღები"
+            className="h-9 text-xs"
+          />
+        </div>
 
         {/* Currency Filter */}
         <Select

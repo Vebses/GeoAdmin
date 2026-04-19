@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 
+function formatExportDate(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()}`;
+}
+
+function formatExportDateTime(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()} ${hh}:${mm}`;
+}
+
 // GET /api/export/invoices - Export invoices as CSV or JSON
 export async function GET(request: NextRequest) {
   try {
@@ -86,9 +106,9 @@ export async function GET(request: NextRequest) {
         'ვალუტა': inv.currency || '',
         'ჯამი': inv.subtotal?.toFixed(2) || '0.00',
         'სულ': inv.total?.toFixed(2) || '0.00',
-        'გაგზავნის თარიღი': inv.sent_at ? new Date(inv.sent_at).toLocaleDateString('ka-GE') : '',
-        'გადახდის თარიღი': inv.paid_at ? new Date(inv.paid_at).toLocaleDateString('ka-GE') : '',
-        'შექმნის თარიღი': inv.created_at ? new Date(inv.created_at).toLocaleString('ka-GE') : '',
+        'გაგზავნის თარიღი': inv.sent_at ? formatExportDate(inv.sent_at) : '',
+        'გადახდის თარიღი': inv.paid_at ? formatExportDate(inv.paid_at) : '',
+        'შექმნის თარიღი': inv.created_at ? formatExportDateTime(inv.created_at) : '',
       };
     });
 

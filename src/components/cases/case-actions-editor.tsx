@@ -2,13 +2,30 @@
 
 import { useState } from 'react';
 import { Plus, GripVertical, Trash2, Check, X } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { useCaseActions, useCreateCaseAction, useUpdateCaseAction, useDeleteCaseAction } from '@/hooks/use-case-actions';
-import { usePartners } from '@/hooks/use-partners';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
+import { useCaseActions, useCreateCaseAction, useUpdateCaseAction, useDeleteCaseAction, useReorderCaseActions } from '@/hooks/use-case-actions';
 import { cn } from '@/lib/utils/cn';
 import { formatCurrency } from '@/lib/utils/format';
 import type { CaseActionWithRelations, CurrencyCode } from '@/types';
@@ -22,16 +39,38 @@ interface CaseActionsEditorProps {
 
 export function CaseActionsEditor({ caseId, readOnly = false }: CaseActionsEditorProps) {
   const { data: actions, isLoading } = useCaseActions(caseId);
-  const { data: partnersData } = usePartners({ limit: 100 });
-  const partners = partnersData?.data || [];
-  
+
   const createMutation = useCreateCaseAction(caseId);
   const updateMutation = useUpdateCaseAction(caseId);
   const deleteMutation = useDeleteCaseAction(caseId);
-  
+  const reorderMutation = useReorderCaseActions(caseId);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [newAction, setNewAction] = useState<Partial<CaseActionWithRelations> | null>(null);
+
+  // Drag sensors — require 8px movement before drag starts, so clicking still works for edit
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !actions) return;
+
+    const oldIndex = actions.findIndex((a) => a.id === active.id);
+    const newIndex = actions.findIndex((a) => a.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(actions, oldIndex, newIndex);
+    const payload = reordered.map((a, idx) => ({ id: a.id, sort_order: idx }));
+    reorderMutation.mutate(payload);
+  };
 
   const handleAddAction = () => {
     setNewAction({
@@ -110,25 +149,34 @@ export function CaseActionsEditor({ caseId, readOnly = false }: CaseActionsEdito
 
       {/* Actions List */}
       <div className="space-y-2">
-        {actions?.map((action) => (
-          <ActionCard
-            key={action.id}
-            action={action}
-            partners={partners}
-            isEditing={editingId === action.id}
-            readOnly={readOnly}
-            onEdit={() => setEditingId(action.id)}
-            onSave={(data) => handleUpdateAction(action.id, data)}
-            onCancel={() => setEditingId(null)}
-            onDelete={() => setDeleteId(action.id)}
-          />
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={actions?.map((a) => a.id) || []}
+            strategy={verticalListSortingStrategy}
+          >
+            {actions?.map((action) => (
+              <SortableActionCard
+                key={action.id}
+                action={action}
+                isEditing={editingId === action.id}
+                readOnly={readOnly}
+                onEdit={() => setEditingId(action.id)}
+                onSave={(data) => handleUpdateAction(action.id, data)}
+                onCancel={() => setEditingId(null)}
+                onDelete={() => setDeleteId(action.id)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
 
         {/* New Action Card */}
         {newAction && (
           <NewActionCard
             action={newAction}
-            partners={partners}
             onChange={setNewAction}
             onSave={handleSaveNewAction}
             onCancel={() => setNewAction(null)}
@@ -213,10 +261,36 @@ function PriceDisplay({ label, value, currency }: PriceDisplayProps) {
   );
 }
 
+// Sortable wrapper for action cards — provides drag handle
+interface SortableActionCardProps extends ActionCardProps {}
+
+function SortableActionCard(props: SortableActionCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.action.id, disabled: props.isEditing || props.readOnly });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 'auto' as const,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <ActionCard {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
 // Action Card Component
 interface ActionCardProps {
   action: CaseActionWithRelations;
-  partners: { id: string; name: string }[];
   isEditing: boolean;
   readOnly: boolean;
   onEdit: () => void;
@@ -225,16 +299,20 @@ interface ActionCardProps {
   onDelete: () => void;
 }
 
+interface ActionCardPropsWithHandle extends ActionCardProps {
+  dragHandleProps?: Record<string, unknown>;
+}
+
 function ActionCard({
   action,
-  partners,
   isEditing,
   readOnly,
   onEdit,
   onSave,
   onCancel,
   onDelete,
-}: ActionCardProps) {
+  dragHandleProps,
+}: ActionCardPropsWithHandle) {
   const [editData, setEditData] = useState<Partial<CaseActionWithRelations>>({});
 
   if (isEditing) {
@@ -253,22 +331,13 @@ function ActionCard({
           </div>
           <div className="space-y-1">
             <label className="text-xs text-gray-500">შემსრულებელი</label>
-            <Select
-              value={editData.executor_id ?? action.executor_id ?? '__none__'}
-              onValueChange={(val) => setEditData({ ...editData, executor_id: val === '__none__' ? null : val })}
-            >
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="აირჩიეთ" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" className="text-xs">-- არ არის --</SelectItem>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="text-xs">
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PartnerCombobox
+              value={editData.executor_id ?? action.executor_id ?? null}
+              onChange={(id) => setEditData({ ...editData, executor_id: id })}
+              placeholder="აირჩიეთ"
+              className="h-8 text-xs"
+              fallbackLabel={action.executor?.name}
+            />
           </div>
         </div>
 
@@ -323,7 +392,17 @@ function ActionCard({
       {/* Row 1: Service Name & Executor */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          {!readOnly && <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0" />}
+          {!readOnly && (
+            <button
+              type="button"
+              className="cursor-grab active:cursor-grabbing touch-none p-0.5 hover:bg-gray-200 rounded"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="გადაადგილება"
+              {...(dragHandleProps || {})}
+            >
+              <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            </button>
+          )}
           <div>
             <div className="font-medium text-sm">{action.service_name}</div>
             <div className="text-xs text-gray-500">{action.executor?.name || 'შემსრულებელი არ არის'}</div>
@@ -370,14 +449,13 @@ function ActionCard({
 // New Action Card Component
 interface NewActionCardProps {
   action: Partial<CaseActionWithRelations>;
-  partners: { id: string; name: string }[];
   onChange: (data: Partial<CaseActionWithRelations>) => void;
   onSave: () => void;
   onCancel: () => void;
   isSaving: boolean;
 }
 
-function NewActionCard({ action, partners, onChange, onSave, onCancel, isSaving }: NewActionCardProps) {
+function NewActionCard({ action, onChange, onSave, onCancel, isSaving }: NewActionCardProps) {
   return (
     <div className="border-2 border-dashed border-green-300 rounded-lg p-3 bg-green-50 space-y-3">
       {/* Row 1: Service Name & Executor */}
@@ -394,22 +472,12 @@ function NewActionCard({ action, partners, onChange, onSave, onCancel, isSaving 
         </div>
         <div className="space-y-1">
           <label className="text-xs text-gray-500">შემსრულებელი</label>
-          <Select
-            value={action.executor_id || '__none__'}
-            onValueChange={(val) => onChange({ ...action, executor_id: val === '__none__' ? null : val })}
-          >
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="აირჩიეთ" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__" className="text-xs">-- არ არის --</SelectItem>
-              {partners.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs">
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerCombobox
+            value={action.executor_id || null}
+            onChange={(id) => onChange({ ...action, executor_id: id })}
+            placeholder="აირჩიეთ"
+            className="h-8 text-xs"
+          />
         </div>
       </div>
 

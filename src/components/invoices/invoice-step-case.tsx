@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { Search, Info, AlertTriangle, Building2, Zap } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
 import { CaseStatusBadge } from '@/components/cases/case-status-badge';
 import type { CaseWithRelations, Partner, OurCompany, CurrencyCode } from '@/types';
 
@@ -55,40 +56,51 @@ export function InvoiceStepCase({
     );
   });
 
-  // Get unique executor IDs from case actions - FILTER RECIPIENTS TO ONLY CASE-RELATED COMPANIES
-  const caseExecutorIds = useMemo(() => {
-    if (!selectedCase?.actions?.length) return new Set<string>();
-    return new Set(selectedCase.actions.map((a) => a.executor_id).filter(Boolean));
-  }, [selectedCase]);
+  // Get relevant partners for this case — client, insurance, and all executors
+  const caseRelatedPartners = useMemo(() => {
+    if (!selectedCase) return [] as Partner[];
+    const ids = new Set<string>();
+    if (selectedCase.client?.id) ids.add(selectedCase.client.id);
+    if (selectedCase.insurance?.id) ids.add(selectedCase.insurance.id);
+    selectedCase.actions?.forEach(a => {
+      if (a.executor_id) ids.add(a.executor_id);
+    });
+    return partners.filter(p => ids.has(p.id));
+  }, [partners, selectedCase]);
 
-  // Filter partners to only those that are executors in the selected case
+  // Available recipients: prioritize case-related partners (client, insurance, executors)
+  // If none found, fall back to all partners
   const availableRecipients = useMemo(() => {
-    if (!selectedCaseId || caseExecutorIds.size === 0) {
-      // No case selected or no actions - show all partners
-      return partners;
-    }
-    // Only show partners that appear as executors in case actions
-    return partners.filter((p) => caseExecutorIds.has(p.id));
-  }, [partners, selectedCaseId, caseExecutorIds]);
+    if (!selectedCaseId) return partners;
+    if (caseRelatedPartners.length === 0) return partners;
+    return caseRelatedPartners;
+  }, [partners, selectedCaseId, caseRelatedPartners]);
 
-  // Get services for selected recipient from case actions
+  // Get services from ALL case actions (invoice is for the whole case, not a specific executor)
   const servicesForRecipient = useMemo(() => {
-    if (!selectedCase?.actions?.length || !selectedRecipientId) return [];
-    return selectedCase.actions.filter((a) => a.executor_id === selectedRecipientId);
-  }, [selectedCase, selectedRecipientId]);
+    if (!selectedCase?.actions?.length) return [];
+    return selectedCase.actions;
+  }, [selectedCase]);
 
   // Determine currency from actions - prioritize commission_currency
   const detectedCurrency = useMemo(() => {
     if (servicesForRecipient.length === 0) return null;
-    // Use commission_currency first, fallback to EUR
     return servicesForRecipient[0]?.commission_currency || 'EUR';
   }, [servicesForRecipient]);
 
-  // Handle case change - reset recipient if they're not in new case
+  // Handle case change — auto-select client (დამკვეთი) as default recipient
   const handleCaseChange = (caseId: string | null) => {
     onCaseChange(caseId);
-    // Reset recipient selection when case changes
-    onRecipientChange(null);
+    // Auto-select the case's client as recipient (the one being invoiced)
+    const newCase = cases.find(c => c.id === caseId);
+    if (newCase?.client?.id) {
+      onRecipientChange(newCase.client.id);
+    } else if (newCase?.insurance?.id) {
+      // Fallback to insurance if no client
+      onRecipientChange(newCase.insurance.id);
+    } else {
+      onRecipientChange(null);
+    }
   };
 
   return (
@@ -179,45 +191,20 @@ export function InvoiceStepCase({
             </div>
           )}
 
-          {/* Recipient Selection - FILTERED BY CASE ACTIONS */}
+          {/* Recipient Selection - with ajax search across all partners */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-gray-700">
               რომელ კომპანიას უგზავნით ინვოისს? *
             </label>
-            <Select
-              value={selectedRecipientId || '__none__'}
-              onValueChange={(value) => onRecipientChange(value === '__none__' ? null : value)}
+            <PartnerCombobox
+              value={selectedRecipientId}
+              onChange={(id) => onRecipientChange(id)}
+              placeholder={selectedCaseId ? 'აირჩიეთ ადრესატი...' : 'ჯერ აირჩიეთ ქეისი'}
               disabled={!selectedCaseId}
-            >
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder={selectedCaseId ? "აირჩიეთ ადრესატი..." : "ჯერ აირჩიეთ ქეისი"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__" className="text-xs text-gray-400">
-                  -- აირჩიეთ ადრესატი --
-                </SelectItem>
-                {availableRecipients.length === 0 && selectedCaseId ? (
-                  <div className="px-2 py-3 text-xs text-amber-600 flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>ამ ქეისს არ აქვს ქმედებები შემსრულებლებით</span>
-                  </div>
-                ) : (
-                  availableRecipients.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id} className="text-xs">
-                      <div className="flex flex-col">
-                        <span className="font-medium">{partner.name}</span>
-                        {partner.legal_name && (
-                          <span className="text-gray-400 text-[10px]">{partner.legal_name}</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {selectedCaseId && availableRecipients.length > 0 && (
+            />
+            {selectedCaseId && availableRecipients.length > 0 && selectedCase?.client && (
               <p className="text-[10px] text-gray-500">
-                ნაჩვენებია მხოლოდ კომპანიები ქეისის ქმედებებიდან ({availableRecipients.length})
+                ნაგულისხმევად არჩეულია დამკვეთი. შეგიძლიათ შეცვალოთ.
               </p>
             )}
           </div>

@@ -29,20 +29,13 @@ function formatCurrency(amount: number, currency: CurrencyCode): string {
   return `${amount.toFixed(2)} ${symbol}`;
 }
 
-function formatDate(dateStr: string, language: InvoiceLanguage): string {
+function formatDate(dateStr: string, _language: InvoiceLanguage): string {
+  // Always use dd/MM/yyyy for consistency across app
   const date = new Date(dateStr);
-  if (language === 'ka') {
-    return date.toLocaleDateString('ka-GE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  if (isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
 }
 
 interface Attachment {

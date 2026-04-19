@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
 import { CaseActionsEditor } from './case-actions-editor';
 import { CaseDocuments } from './case-documents';
 import { caseSchema, type CaseFormData } from '@/lib/utils/validation';
@@ -264,19 +265,11 @@ export function CaseEditPanel({
                   name="client_id"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="აირჩიეთ დამკვეთი..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
-                        {clientPartners.map((partner) => (
-                          <SelectItem key={partner.id} value={partner.id}>
-                            {partner.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <PartnerCombobox
+                      value={field.value || null}
+                      onChange={(id) => field.onChange(id || undefined)}
+                      placeholder="აირჩიეთ დამკვეთი..."
+                    />
                   )}
                 />
               </div>
@@ -326,19 +319,11 @@ export function CaseEditPanel({
                   name="insurance_id"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value || '__none__'} onValueChange={(val) => field.onChange(val === '__none__' ? undefined : val)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="აირჩიეთ სადაზღვევო..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">-- არ არის არჩეული --</SelectItem>
-                        {insurancePartners.map((partner) => (
-                          <SelectItem key={partner.id} value={partner.id}>
-                            {partner.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <PartnerCombobox
+                      value={field.value || null}
+                      onChange={(id) => field.onChange(id || undefined)}
+                      placeholder="აირჩიეთ სადაზღვევო..."
+                    />
                   )}
                 />
               </div>

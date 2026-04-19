@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   X,
   Building2,
@@ -12,12 +13,29 @@ import {
   Briefcase,
   Receipt,
   Pencil,
-  ExternalLink
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils/format';
 import type { PartnerWithRelations } from '@/types';
+
+type CurrencyCode = 'GEL' | 'USD' | 'EUR';
+
+interface CurrencyAmount {
+  currency: CurrencyCode;
+  amount: number;
+}
+
+interface PartnerStats {
+  casesCount: number;
+  invoicesCount: number;
+  invoicesByStatus: { draft: number; unpaid: number; paid: number; cancelled: number };
+  totalByCurrency: CurrencyAmount[];
+  paidByCurrency: CurrencyAmount[];
+  outstandingByCurrency: CurrencyAmount[];
+}
 
 interface PartnerViewModalProps {
   partner: PartnerWithRelations | null;
@@ -108,6 +126,41 @@ export function PartnerViewModal({
   onClose,
   onEdit
 }: PartnerViewModalProps) {
+  const [stats, setStats] = useState<PartnerStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  // Fetch fresh stats whenever the modal opens with a partner
+  useEffect(() => {
+    if (!isOpen || !partner?.id) {
+      setStats(null);
+      return;
+    }
+
+    let cancelled = false;
+    setStatsLoading(true);
+
+    fetch(`/api/partners/${partner.id}/stats`)
+      .then((res) => res.json())
+      .then((result) => {
+        if (cancelled) return;
+        if (result.success) {
+          setStats(result.data);
+        } else {
+          setStats(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStats(null);
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, partner?.id]);
+
   if (!isOpen || !partner) return null;
 
   const fullAddress = [partner.address, partner.city, partner.country]
@@ -161,25 +214,80 @@ export function PartnerViewModal({
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <StatCard
                 icon={Briefcase}
                 label="ქეისები"
-                value={partner.cases_count || 0}
+                value={statsLoading ? '...' : (stats?.casesCount ?? 0)}
                 color="blue"
               />
               <StatCard
                 icon={Receipt}
                 label="ინვოისები"
-                value={partner.invoices_count || 0}
+                value={statsLoading ? '...' : (stats?.invoicesCount ?? 0)}
                 color="emerald"
               />
-              <StatCard
-                icon={FileText}
-                label="თანხა"
-                value={formatCurrency(partner.total_amount || 0, 'GEL')}
-                color="purple"
-              />
+            </div>
+
+            {/* Financial Breakdown (per currency) */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-gray-700 flex items-center gap-2">
+                <FileText size={12} />
+                ფინანსური მიმოხილვა
+              </h3>
+              {statsLoading ? (
+                <div className="flex items-center justify-center py-6 bg-gray-50 rounded-xl">
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                </div>
+              ) : !stats || (stats.totalByCurrency.length === 0) ? (
+                <div className="p-4 bg-gray-50 rounded-xl text-center">
+                  <p className="text-xs text-gray-500">ინვოისები არ არის</p>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3 space-y-3">
+                  {stats.totalByCurrency.map((row) => {
+                    const paid = stats.paidByCurrency.find(r => r.currency === row.currency)?.amount || 0;
+                    const outstanding = stats.outstandingByCurrency.find(r => r.currency === row.currency)?.amount || 0;
+                    return (
+                      <div key={row.currency} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-gray-600">{row.currency}</span>
+                          <span className="font-semibold text-gray-900">{formatCurrency(row.amount, row.currency)}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px]">
+                          <span className="text-emerald-600">
+                            გადახდილი: {formatCurrency(paid, row.currency)}
+                          </span>
+                          <span className="text-amber-600">
+                            გადასახდელი: {formatCurrency(outstanding, row.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Status breakdown */}
+                  <div className="pt-2 border-t border-gray-200 flex items-center gap-3 text-[10px] text-gray-600">
+                    {stats.invoicesByStatus.paid > 0 && (
+                      <span>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1" />
+                        {stats.invoicesByStatus.paid} გადახდილი
+                      </span>
+                    )}
+                    {stats.invoicesByStatus.unpaid > 0 && (
+                      <span>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1" />
+                        {stats.invoicesByStatus.unpaid} გადაუხდელი
+                      </span>
+                    )}
+                    {stats.invoicesByStatus.draft > 0 && (
+                      <span>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-400 mr-1" />
+                        {stats.invoicesByStatus.draft} დრაფტი
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Business Info */}

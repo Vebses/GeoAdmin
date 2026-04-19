@@ -69,15 +69,14 @@ function formatCurrency(amount: number, currency: CurrencyCode): string {
   return `${amount.toFixed(2)} ${symbol}`;
 }
 
-function formatDate(dateStr: string, language: 'en' | 'ka' = 'en'): string {
+function formatDate(dateStr: string, _language: 'en' | 'ka' = 'en'): string {
+  // Always use dd/MM/yyyy format regardless of locale (matches app-wide convention)
   const date = new Date(dateStr);
-  // Use language-specific locale for consistent formatting with email
-  const locale = language === 'ka' ? 'ka-GE' : 'en-GB';
-  return date.toLocaleDateString(locale, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  if (isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 // Compact styles for single page with FiraGO

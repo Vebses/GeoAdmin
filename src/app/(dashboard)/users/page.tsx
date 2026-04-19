@@ -33,6 +33,7 @@ import { useUsers } from '@/hooks/use-users';
 import { useAuth } from '@/hooks/use-auth';
 import { useInvitations, useCancelInvitation, type PendingInvitation } from '@/hooks/use-invitations';
 import { toast } from 'sonner';
+import { formatDate } from '@/lib/utils/format';
 import type { User } from '@/types';
 
 const roleLabels: Record<string, { label: string; color: string }> = {
@@ -232,7 +233,7 @@ export default function UsersPage() {
                   <div className="flex items-center gap-3 text-xs text-amber-700">
                     <span className="flex items-center gap-1">
                       <Clock size={12} />
-                      მოწვეული: {new Date(invitation.created_at).toLocaleDateString('ka-GE')}
+                      მოწვეული: {formatDate(invitation.created_at)}
                     </span>
                   </div>
                 </div>

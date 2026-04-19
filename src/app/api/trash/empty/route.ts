@@ -33,49 +33,57 @@ export async function POST() {
     }
 
     // Get all trashed items
-    const { data: trashedCases } = await supabase
-      .from('cases')
-      .select('id')
-      .not('deleted_at', 'is', null);
+    const [
+      { data: trashedCases },
+      { data: trashedInvoices },
+    ] = await Promise.all([
+      supabase
+        .from('cases')
+        .select('id')
+        .not('deleted_at', 'is', null),
+      supabase
+        .from('invoices')
+        .select('id')
+        .not('deleted_at', 'is', null),
+    ]);
 
-    // Delete case-related records first
+    // Delete case-related records first (case_actions, case_documents)
     if (trashedCases && trashedCases.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const caseIds = (trashedCases as any[]).map(c => c.id);
-      
-      await supabase
-        .from('case_actions')
-        .delete()
-        .in('case_id', caseIds);
 
-      await supabase
-        .from('case_documents')
-        .delete()
-        .in('case_id', caseIds);
+      await Promise.all([
+        supabase.from('case_actions').delete().in('case_id', caseIds),
+        supabase.from('case_documents').delete().in('case_id', caseIds),
+      ]);
     }
 
-    // Permanently delete all trashed items
-    await supabase
-      .from('cases')
-      .delete()
-      .not('deleted_at', 'is', null);
+    // Delete invoice-related records first (invoice_services, invoice_sends)
+    if (trashedInvoices && trashedInvoices.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoiceIds = (trashedInvoices as any[]).map(i => i.id);
 
-    await supabase
-      .from('invoices')
-      .delete()
-      .not('deleted_at', 'is', null);
+      await Promise.all([
+        supabase.from('invoice_services').delete().in('invoice_id', invoiceIds),
+        supabase.from('invoice_sends').delete().in('invoice_id', invoiceIds),
+      ]);
+    }
 
-    await supabase
-      .from('partners')
-      .delete()
-      .not('deleted_at', 'is', null);
+    // Permanently delete all trashed items in parallel
+    await Promise.all([
+      supabase.from('cases').delete().not('deleted_at', 'is', null),
+      supabase.from('invoices').delete().not('deleted_at', 'is', null),
+      supabase.from('partners').delete().not('deleted_at', 'is', null),
+      supabase.from('our_companies').delete().not('deleted_at', 'is', null),
+    ]);
 
-    await supabase
-      .from('our_companies')
-      .delete()
-      .not('deleted_at', 'is', null);
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      data: {
+        deleted_cases: trashedCases?.length || 0,
+        deleted_invoices: trashedInvoices?.length || 0,
+      },
+    });
   } catch (error) {
     console.error('Empty trash error:', error);
     return NextResponse.json(

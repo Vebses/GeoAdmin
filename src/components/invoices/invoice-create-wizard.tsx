@@ -70,11 +70,11 @@ export function InvoiceCreateWizard({
     [ourCompanies, selectedSenderId]
   );
 
-  // Get relevant actions for selected recipient
+  // Get all case actions (invoice is for the whole case, not a specific executor)
   const relevantActions = useMemo(() => {
-    if (!selectedCase?.actions?.length || !selectedRecipientId) return [];
-    return selectedCase.actions.filter((a) => a.executor_id === selectedRecipientId);
-  }, [selectedCase, selectedRecipientId]);
+    if (!selectedCase?.actions?.length) return [];
+    return selectedCase.actions;
+  }, [selectedCase]);
 
   // Detect currency from relevant actions - use commission_currency
   const detectedCurrency = useMemo((): CurrencyCode => {

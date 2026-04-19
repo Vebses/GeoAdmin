@@ -17,6 +17,28 @@ import { toast } from 'sonner';
 type ExportEntity = 'cases' | 'invoices';
 type ExportFormat = 'csv' | 'xlsx';
 
+// Format date consistently as dd/MM/yyyy
+function formatExportDate(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()}`;
+}
+
+// Format date-time as dd/MM/yyyy HH:mm
+function formatExportDateTime(val: unknown): string {
+  if (!val) return '';
+  const d = new Date(String(val));
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()} ${hh}:${mm}`;
+}
+
 interface ExportButtonProps {
   entity: ExportEntity;
   filters?: Record<string, string>;
@@ -283,9 +305,9 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         // Sheet 1: Cases (with inline data)
         const casesSheet = workbook.addWorksheet('ქეისები');
         addDataToWorksheet(casesSheet, casesWithInlineData, caseColumns, {
-          opened_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-          closed_at: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-          created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+          opened_at: formatExportDate,
+          closed_at: formatExportDate,
+          created_at: formatExportDateTime,
         });
 
         // Set text wrapping for inline data columns
@@ -303,8 +325,8 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         const actionsSheet = workbook.addWorksheet('მოქმედებები');
         if (actions && actions.length > 0) {
           addDataToWorksheet(actionsSheet, actions, actionColumns, {
-            service_date: (val) => val ? new Date(String(val)).toLocaleDateString('ka-GE') : '',
-            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+            service_date: formatExportDate,
+            created_at: formatExportDateTime,
           });
         } else {
           actionsSheet.addRow(['მონაცემები არ მოიძებნა']);
@@ -315,7 +337,7 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         if (documents && documents.length > 0) {
           addDataToWorksheet(documentsSheet, documents, documentColumns, {
             type: (val) => documentTypeLabels[String(val)] || val,
-            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+            created_at: formatExportDateTime,
           });
         } else {
           documentsSheet.addRow(['მონაცემები არ მოიძებნა']);
@@ -326,8 +348,8 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
         if (invoices && invoices.length > 0) {
           addDataToWorksheet(invoicesSheet, invoices, invoiceColumns, {
             status: (val) => invoiceStatusLabels[String(val)] || val,
-            paid_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
-            created_at: (val) => val ? new Date(String(val)).toLocaleString('ka-GE') : '',
+            paid_at: formatExportDateTime,
+            created_at: formatExportDateTime,
           });
         } else {
           invoicesSheet.addRow(['მონაცემები არ მოიძებნა']);
@@ -348,11 +370,11 @@ export function ExportButton({ entity, filters, disabled }: ExportButtonProps) {
           ...casesWithInlineData.map((row: Record<string, unknown>) =>
             caseColumns.map(col => {
               let val = String(row[col.key] || '');
-              // Handle date formatting
+              // Handle date formatting (dd/MM/yyyy)
               if (col.key === 'opened_at' || col.key === 'closed_at') {
-                val = val ? new Date(val).toLocaleDateString('ka-GE') : '';
+                val = formatExportDate(val);
               } else if (col.key === 'created_at') {
-                val = val ? new Date(val).toLocaleString('ka-GE') : '';
+                val = formatExportDateTime(val);
               }
               // Escape CSV special characters (including semicolon since we use it as delimiter in inline data)
               if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes(';')) {

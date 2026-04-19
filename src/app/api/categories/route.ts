@@ -19,21 +19,36 @@ export async function GET() {
       );
     }
 
-    // Fetch categories with partner counts
-    const { data, error } = await supabase
-      .from('categories')
-      .select(`
-        *,
-        partners:partners(count)
-      `)
-      .order('sort_order', { ascending: true });
+    // Fetch categories and active-partner counts in parallel
+    const [
+      { data: categoriesData, error: categoriesError },
+      { data: partnerRows },
+    ] = await Promise.all([
+      supabase
+        .from('categories')
+        .select('*')
+        .order('sort_order', { ascending: true }),
+      // Only count active (non-soft-deleted) partners
+      supabase
+        .from('partners')
+        .select('category_id')
+        .is('deleted_at', null),
+    ]);
 
-    if (error) throw error;
+    if (categoriesError) throw categoriesError;
 
-    // Transform data to include partner count
-    const categories = (data || []).map((cat: any) => ({
+    // Count partners per category (excluding soft-deleted)
+    const countByCategory = new Map<string, number>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (partnerRows || []).forEach((row: any) => {
+      if (!row.category_id) return;
+      countByCategory.set(row.category_id, (countByCategory.get(row.category_id) || 0) + 1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const categories = (categoriesData || []).map((cat: any) => ({
       ...cat,
-      partners_count: cat.partners?.[0]?.count || 0,
+      partners_count: countByCategory.get(cat.id) || 0,
     }));
 
     return NextResponse.json({
