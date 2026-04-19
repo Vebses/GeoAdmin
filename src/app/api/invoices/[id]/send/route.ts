@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateInvoicePDF } from '@/lib/pdf';
-import { sendInvoiceEmail, isValidEmail } from '@/lib/email';
+import { sendInvoiceEmail } from '@/lib/email';
 import { requireAuth, isAuthError, FINANCE_ROLES } from '@/lib/auth-utils';
+import { extractStoragePath } from '@/lib/storage-urls';
+import { sanitizeEmailList, sanitizeHeaderLine, sanitizeBodyText, isSafeEmail } from '@/lib/email/sanitize';
+import { canAccessInvoice } from '@/lib/case-access';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface RouteParams {
@@ -21,10 +24,9 @@ interface SendRequest {
   attach_medical_docs?: boolean;
 }
 
-// Validate and filter CC emails
+// Validate and filter CC emails — delegates to central sanitization
 function validateCCEmails(emails: string[] | undefined | null): string[] {
-  if (!emails || !Array.isArray(emails)) return [];
-  return emails.filter(email => typeof email === 'string' && isValidEmail(email.trim()));
+  return sanitizeEmailList(emails, 10);
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -37,6 +39,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (isAuthError(auth)) return auth.response;
 
     const supabase = await createClient();
+
+    // Also enforce case-ownership (belt + braces)
+    const allowed = await canAccessInvoice(supabase, auth.user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის წვდომა' } },
+        { status: 403 }
+      );
+    }
 
     // Get invoice with all relations (exclude soft-deleted)
     const { data: invoice, error: invoiceError } = await supabase
@@ -90,14 +101,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       language: (typedInvoice.language || 'en') as InvoiceLanguage,
     });
 
-    // Determine recipient email
-    const recipientEmail = body.email || typedInvoice.recipient_email || typedInvoice.recipient.email;
-    if (!recipientEmail) {
+    // Determine recipient email — sanitize and validate before using
+    const rawRecipientEmail = body.email || typedInvoice.recipient_email || typedInvoice.recipient.email;
+    if (!rawRecipientEmail) {
       return NextResponse.json(
         { success: false, error: { code: 'NO_EMAIL', message: 'ადრესატის ელ-ფოსტა არ არის მითითებული' } },
         { status: 400 }
       );
     }
+    const recipientEmail = String(rawRecipientEmail).trim();
+    if (!isSafeEmail(recipientEmail)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_EMAIL', message: 'ადრესატის ელ-ფოსტა არასწორია' } },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize subject and body before use — prevents header injection via subject newlines
+    const safeSubject = sanitizeHeaderLine(body.subject || typedInvoice.email_subject || '', 200);
+    const safeBody = sanitizeBodyText(body.body || typedInvoice.email_body || '', 10000);
 
     // Fetch additional attachments if needed
     const additionalAttachments: Array<{ filename: string; content: Buffer }> = [];
@@ -126,23 +148,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
       if (docs) {
         for (const doc of docs as Array<{ file_url: string; file_name: string }>) {
-          if (doc.file_url) {
-            try {
-              const response = await fetch(doc.file_url);
-              if (response.ok) {
-                const buffer = await response.arrayBuffer();
-                additionalAttachments.push({
-                  filename: doc.file_name,
-                  content: Buffer.from(buffer),
-                });
-              } else {
-                console.warn(`Failed to fetch document (${response.status}): ${doc.file_name}`);
-                failedAttachments.push(doc.file_name);
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch document: ${doc.file_name}`, err);
+          const path = extractStoragePath(doc.file_url);
+          if (!path) continue;
+          try {
+            // Download directly from private bucket via server-side SDK
+            // (bypasses need for signed URL round-trip)
+            const { data, error: dlError } = await supabase.storage
+              .from('geoadmin-files')
+              .download(path);
+            if (dlError || !data) {
+              console.warn(`Failed to download document: ${doc.file_name}`, dlError);
               failedAttachments.push(doc.file_name);
+              continue;
             }
+            const buffer = await data.arrayBuffer();
+            additionalAttachments.push({
+              filename: doc.file_name,
+              content: Buffer.from(buffer),
+            });
+          } catch (err) {
+            console.warn(`Failed to fetch document: ${doc.file_name}`, err);
+            failedAttachments.push(doc.file_name);
           }
         }
       }
@@ -171,8 +197,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       pdfBuffer,
       to: recipientEmail,
       cc: validatedCCEmails,
-      subject: body.subject,
-      body: body.body,
+      subject: safeSubject,
+      body: safeBody,
       additionalAttachments,
     });
 
@@ -184,8 +210,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         sent_by: auth.user.id,
         email: recipientEmail,
         cc_emails: validatedCCEmails,
-        subject: body.subject || typedInvoice.email_subject || '',
-        body: body.body || typedInvoice.email_body || '',
+        subject: safeSubject,
+        body: safeBody,
         status: 'failed',
         error_message: sendResult.error,
         is_resend: (typedInvoice.sends?.length || 0) > 0,
@@ -206,8 +232,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         sent_by: auth.user.id,
         email: recipientEmail,
         cc_emails: validatedCCEmails,
-        subject: body.subject || typedInvoice.email_subject || '',
-        body: body.body || typedInvoice.email_body || '',
+        subject: safeSubject,
+        body: safeBody,
         status: 'sent',
         resend_id: sendResult.messageId,
         is_resend: (typedInvoice.sends?.length || 0) > 0,

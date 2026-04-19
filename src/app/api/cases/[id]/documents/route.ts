@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
+import { canAccessCase } from '@/lib/case-access';
+import { verifyFileMagicBytes, isUuid } from '@/lib/file-validation';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,8 +12,16 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: caseId } = await params;
+
+    if (!isUuid(caseId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'არასწორი ქეისის ID' } },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -20,18 +31,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if case exists
-    const { data: caseExists, error: caseError } = await supabase
-      .from('cases')
-      .select('id')
-      .eq('id', caseId)
-      .is('deleted_at', null)
-      .single();
-
-    if (caseError || !caseExists) {
+    // Enforce case ownership — not just "case exists"
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
       return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
-        { status: 404 }
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 } // Use 404 (not 403) to avoid leaking existence
       );
     }
 
@@ -57,9 +62,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (error) throw error;
 
+    // Replace stored path/URL with a short-lived signed URL for each document
+    const docs = (data || []) as Array<{ file_url: string | null }>;
+    const paths = docs.map(d => d.file_url);
+    const signedMap = await getSignedFileUrls(supabase, paths);
+
+    const withSignedUrls = docs.map(d => ({
+      ...d,
+      file_url: signedMap.get(extractStoragePath(d.file_url) || '') || d.file_url,
+    }));
+
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: withSignedUrls,
     });
   } catch (error) {
     console.error('Case documents GET error:', error);
@@ -74,6 +89,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: caseId } = await params;
+
+    if (!isUuid(caseId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'არასწორი ქეისის ID' } },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
     
     // Check auth
@@ -85,15 +108,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if case exists
-    const { data: caseData, error: caseError } = await supabase
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
+      );
+    }
+
+    // Fetch current doc count for the counter update
+    const { data: caseData } = await supabase
       .from('cases')
       .select('id, documents_count')
       .eq('id', caseId)
       .is('deleted_at', null)
       .single();
 
-    if (caseError || !caseData) {
+    if (!caseData) {
       return NextResponse.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
         { status: 404 }
@@ -144,6 +176,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!fileExt || !ALLOWED_EXTENSIONS.includes(fileExt)) {
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის გაფართოება დაუშვებელია' } },
+        { status: 400 }
+      );
+    }
+
+    // Verify magic bytes match the declared MIME type (defeats Content-Type spoofing)
+    const magicBytesValid = await verifyFileMagicBytes(file, file.type);
+    if (!magicBytesValid) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის შიგთავსი არ ემთხვევა ტიპს (შესაძლო ყალბი ფაილი)' } },
         { status: 400 }
       );
     }
@@ -202,17 +243,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('geoadmin-files')
-      .getPublicUrl(uniqueName);
-
-    // Create document record
+    // Store the storage path only — signed URLs are generated at read time.
+    // Bucket is private; we never expose a permanent public URL for patient documents.
     const insertData = {
       case_id: caseId,
       type,
       file_name: file.name,
-      file_url: urlData.publicUrl,
+      file_url: uniqueName,     // path within bucket, e.g. "{caseId}/{type}/{ts}_{name}.{ext}"
       file_size: file.size,
       mime_type: file.type,
       uploaded_by: user.id,
@@ -231,15 +268,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Update case document count
     await (supabase.from('cases') as any)
-      .update({ 
+      .update({
         documents_count: (caseData as any).documents_count + 1,
-        updated_at: new Date().toISOString() 
+        updated_at: new Date().toISOString()
       })
       .eq('id', caseId);
 
+    // Return the newly-created document with a signed URL instead of the raw path
+    const signedMap = await getSignedFileUrls(supabase, [uniqueName]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const docWithSignedUrl = {
+      ...(newDocument as any),
+      file_url: signedMap.get(uniqueName) || uniqueName,
+    };
+
     return NextResponse.json({
       success: true,
-      data: newDocument,
+      data: docWithSignedUrl,
     }, { status: 201 });
   } catch (error) {
     console.error('Case documents POST error:', error);

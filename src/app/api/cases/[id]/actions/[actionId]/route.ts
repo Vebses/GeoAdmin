@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseActionSchema } from '@/lib/utils/validation';
+import { canAccessCase } from '@/lib/case-access';
+import { logCaseActivity } from '@/lib/activity-logs';
 
 interface RouteParams {
   params: Promise<{ id: string; actionId: string }>;
@@ -18,6 +20,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
       );
     }
 
@@ -56,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: caseId, actionId } = await params;
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -66,10 +77,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if action exists
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
+      );
+    }
+
+    // Check if action exists — fetch full row for audit log
     const { data: existingAction, error: findError } = await supabase
       .from('case_actions')
-      .select('id')
+      .select('*')
       .eq('id', actionId)
       .eq('case_id', caseId)
       .single();
@@ -132,6 +152,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Update case totals
     await updateCaseTotals(supabase, caseId);
 
+    // Audit — log before/after values for financial fields
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prevAction = existingAction as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newAction = updatedAction as any;
+    await logCaseActivity(
+      user.id,
+      undefined,
+      'updated',
+      caseId,
+      '',
+      {
+        action_id: actionId,
+        service_name: newAction?.service_name,
+        before: {
+          service_cost: prevAction.service_cost,
+          service_currency: prevAction.service_currency,
+          assistance_cost: prevAction.assistance_cost,
+          commission_cost: prevAction.commission_cost,
+          executor_id: prevAction.executor_id,
+        },
+        after: {
+          service_cost: newAction?.service_cost,
+          service_currency: newAction?.service_currency,
+          assistance_cost: newAction?.assistance_cost,
+          commission_cost: newAction?.commission_cost,
+          executor_id: newAction?.executor_id,
+        },
+      }
+    );
+
     return NextResponse.json({
       success: true,
       data: updatedAction,
@@ -150,7 +201,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: caseId, actionId } = await params;
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -160,10 +211,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if action exists
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
+      );
+    }
+
+    // Check if action exists — fetch full row for audit log snapshot
     const { data: existingAction, error: findError } = await supabase
       .from('case_actions')
-      .select('id')
+      .select('*')
       .eq('id', actionId)
       .eq('case_id', caseId)
       .single();
@@ -185,6 +245,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Update case totals
     await updateCaseTotals(supabase, caseId);
+
+    // Audit — snapshot the deleted row so it can be reconstructed from logs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deletedSnapshot = existingAction as any;
+    await logCaseActivity(
+      user.id,
+      undefined,
+      'deleted',
+      caseId,
+      '',
+      {
+        deleted_action_snapshot: deletedSnapshot,
+      }
+    );
 
     return NextResponse.json({
       success: true,

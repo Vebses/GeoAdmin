@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendPasswordResetEmail } from '@/lib/email/auth';
-import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
-import crypto from 'crypto';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { hashToken, generateSecureToken } from '@/lib/token-utils';
 
 export async function POST(request: NextRequest) {
   try {
     // Rate limit: 5 reset requests per 15 minutes per IP
     const ip = getClientIp(request);
-    const rateCheck = checkRateLimit(`reset:${ip}`, { limit: 5, windowSec: 900 });
+    const rateCheck = await checkRateLimitAsync(`reset:${ip}`, { limit: 5, windowSec: 900 });
     if (!rateCheck.success) {
       return NextResponse.json(
         { error: 'ძალიან ბევრი მოთხოვნა. სცადეთ მოგვიანებით.' },
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const resetToken = generateSecureToken(32);
+    const resetTokenHash = hashToken(resetToken);
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Store reset token in database

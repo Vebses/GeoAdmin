@@ -1,12 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { logActivity } from '@/lib/activity-logs';
 
 // Roles that can manage trash
 const ADMIN_ROLES = ['super_admin', 'manager'];
+const CONFIRM_PHRASE = 'EMPTY_TRASH';
 
 // POST /api/trash/empty - Empty all trash
-export async function POST() {
+// Requires header `x-delete-confirmation: EMPTY_TRASH`
+export async function POST(request: NextRequest) {
   try {
+    const confirmHeader = request.headers.get('x-delete-confirmation') || '';
+    if (confirmHeader !== CONFIRM_PHRASE) {
+      return NextResponse.json(
+        { success: false, error: { code: 'CONFIRMATION_REQUIRED', message: 'დადასტურება საჭიროა' } },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -77,12 +88,23 @@ export async function POST() {
       supabase.from('our_companies').delete().not('deleted_at', 'is', null),
     ]);
 
+    const counts = {
+      deleted_cases: trashedCases?.length || 0,
+      deleted_invoices: trashedInvoices?.length || 0,
+    };
+
+    // Audit the destructive action
+    await logActivity({
+      userId: user.id,
+      action: 'deleted',
+      entityType: 'settings',
+      entityName: 'trash_emptied',
+      details: { ...counts, action: 'empty_trash' },
+    });
+
     return NextResponse.json({
       success: true,
-      data: {
-        deleted_cases: trashedCases?.length || 0,
-        deleted_invoices: trashedInvoices?.length || 0,
-      },
+      data: counts,
     });
   } catch (error) {
     console.error('Empty trash error:', error);

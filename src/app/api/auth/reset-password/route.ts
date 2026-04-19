@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import crypto from 'crypto';
+import { hashToken, timingSafeEqualHex, randomResponseDelay } from '@/lib/token-utils';
+import { revokeAllUserSessions } from '@/lib/sessions';
 
 // Create admin client for password update
 function getAdminClient() {
@@ -41,27 +42,26 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerClient();
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashToken(token);
 
-    // Find user with this token
+    // Find user with this token — we still need DB lookup, but then verify
+    // the hash in constant time and always equalize response times.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: user, error: findError } = await (supabase
       .from('users') as any)
-      .select('id, email, reset_token_expires_at')
+      .select('id, email, reset_token, reset_token_expires_at')
       .eq('reset_token', tokenHash)
       .single();
 
-    if (findError || !user) {
+    const userFound = !findError && !!user;
+    const hashMatches = userFound && timingSafeEqualHex(user.reset_token || '', tokenHash);
+    const notExpired = userFound && new Date(user.reset_token_expires_at) >= new Date();
+
+    if (!userFound || !hashMatches || !notExpired) {
+      // Equalize response time with the success path to prevent timing enumeration
+      await randomResponseDelay();
       return NextResponse.json(
         { error: 'არასწორი ან ვადაგასული ბმული' },
-        { status: 400 }
-      );
-    }
-
-    // Check if token has expired
-    if (new Date(user.reset_token_expires_at) < new Date()) {
-      return NextResponse.json(
-        { error: 'ბმულის ვადა ამოიწურა' },
         { status: 400 }
       );
     }
@@ -112,6 +112,11 @@ export async function POST(request: NextRequest) {
         reset_token_expires_at: null,
       })
       .eq('id', user.id);
+
+    // Force logout of all existing sessions — password change should invalidate everywhere
+    await revokeAllUserSessions(supabase, user.id).catch(err =>
+      console.error('Session revoke after reset failed:', err)
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

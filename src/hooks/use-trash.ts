@@ -33,6 +33,7 @@ async function restoreItem(id: string, entityType: string): Promise<void> {
 async function permanentDelete(id: string, entityType: string): Promise<void> {
   const response = await fetch(`/api/trash/${id}/permanent?entity_type=${entityType}`, {
     method: 'DELETE',
+    headers: { 'x-delete-confirmation': 'PERMANENTLY_DELETE' },
   });
   const result = await response.json();
   if (!result.success) throw new Error(result.error?.message || 'Failed to delete');
@@ -41,6 +42,7 @@ async function permanentDelete(id: string, entityType: string): Promise<void> {
 async function emptyTrash(): Promise<void> {
   const response = await fetch('/api/trash/empty', {
     method: 'POST',
+    headers: { 'x-delete-confirmation': 'EMPTY_TRASH' },
   });
   const result = await response.json();
   if (!result.success) throw new Error(result.error?.message || 'Failed to empty trash');

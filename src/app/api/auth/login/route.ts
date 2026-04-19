@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { createSession, extractSessionInfo } from '@/lib/sessions';
 import type { User } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit: 10 login attempts per minute per IP
+    // Rate limit: 10 login attempts per minute per IP (Postgres-backed, consistent across instances)
     const ip = getClientIp(request);
-    const rateCheck = checkRateLimit(`login:${ip}`, { limit: 10, windowSec: 60 });
+    const rateCheck = await checkRateLimitAsync(`login:${ip}`, { limit: 10, windowSec: 60 });
     if (!rateCheck.success) {
       return NextResponse.json(
         { error: 'ძალიან ბევრი მოთხოვნა. სცადეთ მოგვიანებით.' },
@@ -83,10 +84,20 @@ export async function POST(request: NextRequest) {
 
     // Update last login timestamp
     if (userProfile) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('users')
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', data.user.id);
+
+      // Create a server-side session row for audit + forced revocation
+      const sessionInfo = extractSessionInfo(request);
+      // Fire and forget — session tracking should never block login
+      createSession(supabase, {
+        userId: data.user.id,
+        ipAddress: sessionInfo.ipAddress,
+        userAgent: sessionInfo.userAgent,
+      }).catch(err => console.error('Session create failed:', err));
     }
 
     return NextResponse.json({

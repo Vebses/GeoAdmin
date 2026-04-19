@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, isAuthError, FINANCE_ROLES } from '@/lib/auth-utils';
+import { logInvoiceActivity } from '@/lib/activity-logs';
+import { canAccessInvoice } from '@/lib/case-access';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -16,10 +18,19 @@ export async function POST(request: Request, context: RouteContext) {
 
     const supabase = await createClient();
 
+    // Case-ownership belt & braces
+    const allowed = await canAccessInvoice(supabase, auth.user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ წვდომა' } },
+        { status: 403 }
+      );
+    }
+
     // Get invoice
     const { data: invoice, error: fetchError } = await supabase
       .from('invoices')
-      .select('id, status, total')
+      .select('id, invoice_number, status, total, currency')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -31,7 +42,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const invoiceData = invoice as { id: string; status: string; total: number };
+    const invoiceData = invoice as { id: string; invoice_number: string; status: string; total: number; currency: string };
 
     if (invoiceData.status === 'paid') {
       return NextResponse.json(
@@ -79,6 +90,24 @@ export async function POST(request: Request, context: RouteContext) {
       .single();
 
     if (refetchError) throw refetchError;
+
+    // Audit trail — critical financial action must be logged
+    await logInvoiceActivity(
+      auth.user.id,
+      undefined,
+      'paid',
+      id,
+      invoiceData.invoice_number,
+      {
+        old_status: invoiceData.status,
+        new_status: 'paid',
+        total: invoiceData.total,
+        currency: invoiceData.currency,
+        payment_reference: payment_reference || null,
+        payment_notes: payment_notes || null,
+        paid_at: updateData.paid_at,
+      }
+    );
 
     return NextResponse.json({
       success: true,

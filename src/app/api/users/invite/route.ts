@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
-import crypto from 'crypto';
+import { hashToken, generateSecureToken } from '@/lib/token-utils';
 
 // Role hierarchy for permission checks
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -97,8 +97,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate invitation token
-    const inviteToken = crypto.randomBytes(32).toString('hex');
-    const inviteTokenHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
+    const inviteToken = generateSecureToken(32);
+    const inviteTokenHash = hashToken(inviteToken);
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
     // Create invitation record

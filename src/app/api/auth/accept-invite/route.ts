@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { notifyUserRegistered } from '@/lib/notifications';
-import crypto from 'crypto';
+import { hashToken, timingSafeEqualHex, randomResponseDelay } from '@/lib/token-utils';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 // Create admin client for user creation
 function getAdminClient() {
@@ -23,10 +24,21 @@ function getAdminClient() {
 // POST - Accept invitation and create account
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 accept attempts per 5 min per IP
+    const ip = getClientIp(request);
+    const rateCheck = await checkRateLimitAsync(`invite-accept:${ip}`, { limit: 10, windowSec: 300 });
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RATE_LIMIT', message: 'ძალიან ბევრი მოთხოვნა' } },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { token, full_name, password } = body;
 
-    if (!token || !password) {
+    if (!token || !password || typeof token !== 'string') {
+      await randomResponseDelay();
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'ტოკენი და პაროლი აუცილებელია' } },
         { status: 400 }
@@ -50,17 +62,17 @@ export async function POST(request: NextRequest) {
 
     // Use admin client to bypass RLS - the person accepting the invite is not logged in
     const adminClient = getAdminClient();
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashToken(token);
 
-    let invitation: { id: string; email: string; role: string; expires_at: string; accepted_at?: string | null } | null = null;
+    let invitation: { id: string; email: string; role: string; expires_at: string; invitation_token?: string; accepted_at?: string | null } | null = null;
     let isOldFormat = false;
 
-    // FIRST: Try to find invitation in NEW user_invitations table
+    // FIRST: Try NEW user_invitations table
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newInvitation, error: newError } = await (adminClient
         .from('user_invitations') as any)
-        .select('id, email, role, expires_at, accepted_at')
+        .select('id, email, role, expires_at, accepted_at, invitation_token')
         .eq('invitation_token', tokenHash)
         .single();
 
@@ -68,7 +80,6 @@ export async function POST(request: NextRequest) {
         invitation = newInvitation;
       }
     } catch (e) {
-      // Table might not exist, continue to old format
       console.log('user_invitations table not found, trying old format');
     }
 
@@ -87,31 +98,24 @@ export async function POST(request: NextRequest) {
           email: oldInvitation.email,
           role: oldInvitation.role,
           expires_at: oldInvitation.invitation_expires_at,
-          accepted_at: null, // Old format doesn't track this
+          invitation_token: oldInvitation.invitation_token,
+          accepted_at: null,
         };
         isOldFormat = true;
       }
     }
 
-    if (!invitation) {
+    // Constant-time token hash verification
+    const invitationValid =
+      !!invitation &&
+      timingSafeEqualHex(invitation.invitation_token || '', tokenHash) &&
+      !invitation.accepted_at &&
+      (!invitation.expires_at || new Date(invitation.expires_at) >= new Date());
+
+    if (!invitationValid || !invitation) {
+      await randomResponseDelay();
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_TOKEN', message: 'არასწორი ან ვადაგასული მოწვევა' } },
-        { status: 400 }
-      );
-    }
-
-    // Check if already accepted (new format only)
-    if (invitation.accepted_at) {
-      return NextResponse.json(
-        { success: false, error: { code: 'ALREADY_ACCEPTED', message: 'მოწვევა უკვე გამოყენებულია' } },
-        { status: 400 }
-      );
-    }
-
-    // Check if invitation has expired
-    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
-      return NextResponse.json(
-        { success: false, error: { code: 'EXPIRED_TOKEN', message: 'მოწვევის ვადა ამოიწურა' } },
         { status: 400 }
       );
     }
@@ -213,32 +217,28 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get('token');
 
     if (!token) {
+      await randomResponseDelay();
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 
-    // Use admin client to bypass RLS - the person validating the invite is not logged in
     const adminClient = getAdminClient();
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashToken(token);
 
-    let invitation: { email: string; role: string; expires_at?: string; accepted_at?: string | null } | null = null;
+    let invitation: { email: string; role: string; expires_at?: string; accepted_at?: string | null; invitation_token?: string } | null = null;
 
-    // FIRST: Try to find invitation in NEW user_invitations table
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newInvitation } = await (adminClient
         .from('user_invitations') as any)
-        .select('email, role, expires_at, accepted_at')
+        .select('email, role, expires_at, accepted_at, invitation_token')
         .eq('invitation_token', tokenHash)
         .single();
 
-      if (newInvitation) {
-        invitation = newInvitation;
-      }
+      if (newInvitation) invitation = newInvitation;
     } catch (e) {
-      // Table might not exist, continue to old format
+      // fallback
     }
 
-    // SECOND: If not found, try OLD format in users table
     if (!invitation) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: oldInvitation } = await (adminClient
@@ -252,32 +252,31 @@ export async function GET(request: NextRequest) {
           email: oldInvitation.email,
           role: oldInvitation.role,
           expires_at: oldInvitation.invitation_expires_at,
+          invitation_token: oldInvitation.invitation_token,
           accepted_at: null,
         };
       }
     }
 
-    if (!invitation) {
+    const valid =
+      !!invitation &&
+      timingSafeEqualHex(invitation.invitation_token || '', tokenHash) &&
+      !invitation.accepted_at &&
+      (!invitation.expires_at || new Date(invitation.expires_at) >= new Date());
+
+    if (!valid || !invitation) {
+      await randomResponseDelay();
       return NextResponse.json({ valid: false, email: null, role: null });
     }
 
-    // Check if already accepted
-    if (invitation.accepted_at) {
-      return NextResponse.json({ valid: false, email: null, role: null });
-    }
-
-    // Check if token has expired
-    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
-      return NextResponse.json({ valid: false, email: null, role: null });
-    }
-
-    return NextResponse.json({ 
-      valid: true, 
+    return NextResponse.json({
+      valid: true,
       email: invitation.email,
       role: invitation.role,
     });
   } catch (error) {
     console.error('Validate invite token error:', error);
+    await randomResponseDelay();
     return NextResponse.json({ valid: false, email: null, role: null });
   }
 }

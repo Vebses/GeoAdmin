@@ -1,4 +1,5 @@
 // User Invitation Email Template
+import { sanitizeDisplayName } from '../sanitize';
 
 export interface InvitationTemplateParams {
   inviteUrl: string;
@@ -16,8 +17,14 @@ const roleLabels: Record<string, string> = {
 
 export const invitationTemplate = {
   subject: 'მოწვევა GeoAdmin სისტემაში',
-  
-  html: ({ inviteUrl, email, role, inviterName }: InvitationTemplateParams) => `
+
+  html: (params: InvitationTemplateParams) => {
+    // Escape all user-controlled strings for safe HTML interpolation
+    const inviteUrl = params.inviteUrl; // URL — used in href, must not be HTML-escaped
+    const email = sanitizeDisplayName(params.email, 254);
+    const role = sanitizeDisplayName(params.role, 32);
+    const inviterName = sanitizeDisplayName(params.inviterName, 100);
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -117,9 +124,16 @@ export const invitationTemplate = {
   </table>
 </body>
 </html>
-`,
+`;
+  },
 
-  text: ({ inviteUrl, email, role, inviterName }: InvitationTemplateParams) => `
+  text: (params: InvitationTemplateParams) => {
+    const inviteUrl = params.inviteUrl;
+    // For plain-text we only need to strip newlines (no HTML escape)
+    const email = (params.email || '').replace(/[\r\n]/g, ' ').substring(0, 254);
+    const role = (params.role || '').replace(/[\r\n]/g, ' ').substring(0, 32);
+    const inviterName = (params.inviterName || '').replace(/[\r\n]/g, ' ').substring(0, 100);
+    return `
 მოწვევა GeoAdmin სისტემაში
 
 გამარჯობა!
@@ -136,5 +150,6 @@ ${inviteUrl}
 ბმული მოქმედებს 48 საათის განმავლობაში.
 
 © ${new Date().getFullYear()} GeoAdmin
-`,
+`;
+  },
 };

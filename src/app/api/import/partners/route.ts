@@ -79,72 +79,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result: ImportResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
+    // Call the atomic import RPC — entire batch runs in a single DB function call.
+    // Per-row errors are captured without aborting the batch; critical errors roll everything back.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('bulk_import_partners', {
+      rows_json: rows,
+      p_category_id: categoryId || null,
+    });
 
-    // Process each row
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      
-      // Validate required field
-      if (!row.name || row.name.trim() === '') {
-        result.failed++;
-        result.errors.push({ row: i + 1, error: 'სახელი სავალდებულოა' });
-        continue;
-      }
-
-      // Check for duplicate by name or id_code
-      if (row.id_code) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: existing } = await (supabase
-          .from('partners') as any)
-          .select('id')
-          .eq('id_code', row.id_code)
-          .is('deleted_at', null)
-          .single();
-
-        if (existing) {
-          result.failed++;
-          result.errors.push({ row: i + 1, error: `ID კოდი "${row.id_code}" უკვე არსებობს` });
-          continue;
-        }
-      }
-
-      // Prepare data for insert
-      const partnerData = {
-        name: row.name.trim(),
-        legal_name: row.legal_name?.trim() || null,
-        id_code: row.id_code?.trim() || null,
-        category_id: row.category_id || categoryId || null,
-        country: row.country?.trim() || null,
-        city: row.city?.trim() || null,
-        address: row.address?.trim() || null,
-        email: row.email?.trim() || null,
-        phone: row.phone?.trim() || null,
-        contact_person: row.contact_person?.trim() || null,
-        notes: row.notes?.trim() || null,
-      };
-
-      // Insert partner
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase
-        .from('partners') as any)
-        .insert(partnerData);
-
-      if (error) {
-        result.failed++;
-        result.errors.push({ row: i + 1, error: error.message });
-      } else {
-        result.success++;
-      }
+    if (error) {
+      console.error('Import RPC error:', error);
+      return NextResponse.json(
+        { success: false, error: { code: 'IMPORT_FAILED', message: error.message || 'იმპორტი ვერ მოხერხდა' } },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      data: result 
+    // Normalize RPC result to match existing response shape
+    const rpcResult = (data || {}) as { success?: number; skipped?: number; failed?: number; errors?: Array<{ row: number; error: string }> };
+    const result: ImportResult = {
+      success: rpcResult.success || 0,
+      failed: (rpcResult.failed || 0) + (rpcResult.skipped || 0),
+      errors: rpcResult.errors || [],
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: result
     });
   } catch (error) {
     console.error('Import partners error:', error);

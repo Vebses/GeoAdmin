@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { invoiceSchema } from '@/lib/utils/validation';
+import { canAccessInvoice } from '@/lib/case-access';
+import { logInvoiceActivity } from '@/lib/activity-logs';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -24,13 +26,22 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Enforce ownership: user must be admin/accountant or have access to the parent case
+    const allowed = await canAccessInvoice(supabase, user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის წვდომის უფლება' } },
+        { status: 403 }
       );
     }
 
@@ -76,7 +87,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -86,10 +97,19 @@ export async function PUT(request: Request, context: RouteContext) {
       );
     }
 
-    // Check if invoice exists
+    // Enforce ownership
+    const allowed = await canAccessInvoice(supabase, user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის რედაქტირების უფლება' } },
+        { status: 403 }
+      );
+    }
+
+    // Check if invoice exists (with version for optimistic lock)
     const { data: existingInvoice, error: existingError } = await supabase
       .from('invoices')
-      .select('id, status, case_id')
+      .select('id, status, case_id, version')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -101,7 +121,8 @@ export async function PUT(request: Request, context: RouteContext) {
       );
     }
 
-    const invoiceStatus = (existingInvoice as { status: string }).status;
+    const existingInvoiceData = existingInvoice as { id: string; status: string; case_id: string; version: number };
+    const invoiceStatus = existingInvoiceData.status;
 
     // Prevent editing paid invoices (except notes)
     if (invoiceStatus === 'paid') {
@@ -113,6 +134,23 @@ export async function PUT(request: Request, context: RouteContext) {
 
     // Parse request body
     const body = await request.json();
+
+    // Optimistic locking
+    const clientVersion = typeof body.version === 'number' ? body.version : null;
+    if (clientVersion !== null && clientVersion !== existingInvoiceData.version) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'VERSION_CONFLICT',
+            message: 'ინვოისი სხვის მიერ შეიცვალა. გთხოვთ, განაახლოთ გვერდი.',
+            current_version: existingInvoiceData.version,
+          }
+        },
+        { status: 409 }
+      );
+    }
+
     const validationResult = invoiceSchema.partial().safeParse(body);
     
     if (!validationResult.success) {
@@ -160,13 +198,25 @@ export async function PUT(request: Request, context: RouteContext) {
 
     updateObject.updated_at = new Date().toISOString();
 
-    // Update invoice
-    const { error: updateError } = await supabase
-      .from('invoices')
-      .update(updateObject as never)
+    // Update invoice — include version in WHERE for optimistic lock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateQuery = (supabase.from('invoices') as any)
+      .update(updateObject)
       .eq('id', id);
+    if (clientVersion !== null) {
+      updateQuery.eq('version', clientVersion);
+    }
+    const { data: updatedRows, error: updateError } = await updateQuery.select('id');
 
     if (updateError) throw updateError;
+
+    if (!updatedRows || updatedRows.length === 0) {
+      // Either the row disappeared or version changed mid-flight
+      return NextResponse.json(
+        { success: false, error: { code: 'VERSION_CONFLICT', message: 'ინვოისი ახლახან შეიცვალა. სცადეთ ხელახლა.' } },
+        { status: 409 }
+      );
+    }
 
     // Update services if provided
     if (services && services.length > 0) {
@@ -210,6 +260,23 @@ export async function PUT(request: Request, context: RouteContext) {
 
     if (fetchError) throw fetchError;
 
+    // Audit trail — log what changed
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatedInvoiceData = updatedInvoice as any;
+    await logInvoiceActivity(
+      user.id,
+      undefined,
+      updateData.status && updateData.status !== existingInvoiceData.status ? 'updated' : 'updated',
+      id,
+      updatedInvoiceData?.invoice_number || '',
+      {
+        old_status: existingInvoiceData.status,
+        new_status: updateData.status || existingInvoiceData.status,
+        services_changed: Array.isArray(services) && services.length > 0,
+        new_total: updateObject.total,
+      }
+    );
+
     return NextResponse.json({
       success: true,
       data: updatedInvoice,
@@ -227,13 +294,22 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const supabase = await createClient();
-    
+
     // Check auth
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Enforce ownership
+    const allowed = await canAccessInvoice(supabase, user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის წაშლის უფლება' } },
+        { status: 403 }
       );
     }
 

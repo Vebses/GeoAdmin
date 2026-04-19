@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseReassigned, notifyCaseStatusChanged } from '@/lib/notifications';
 import { logCaseActivity } from '@/lib/activity-logs';
+import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -97,9 +98,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw error;
     }
 
+    // Replace embedded document paths with short-lived signed URLs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const caseWithDocs = data as any;
+    if (caseWithDocs?.documents && Array.isArray(caseWithDocs.documents) && caseWithDocs.documents.length > 0) {
+      const paths = caseWithDocs.documents.map((d: { file_url: string | null }) => d.file_url);
+      const signedMap = await getSignedFileUrls(supabase, paths);
+      caseWithDocs.documents = caseWithDocs.documents.map((d: { file_url: string | null }) => ({
+        ...d,
+        file_url: signedMap.get(extractStoragePath(d.file_url) || '') || d.file_url,
+      }));
+    }
+
     return NextResponse.json({
       success: true,
-      data,
+      data: caseWithDocs,
     });
   } catch (error) {
     console.error('Case GET error:', error);
@@ -133,10 +146,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const userRole = (currentUserProfile as any)?.role || 'assistant';
 
-    // Check if case exists and get current data
+    // Check if case exists and get current data (including version for optimistic lock)
     const { data: existingCase, error: findError } = await supabase
       .from('cases')
-      .select('id, case_number, assigned_to, status, created_by')
+      .select('id, case_number, assigned_to, status, created_by, version')
       .eq('id', id)
       .is('deleted_at', null)
       .single();
@@ -148,7 +161,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const existingCaseData = existingCase as { id: string; case_number: string; assigned_to: string | null; status: string; created_by: string | null };
+    const existingCaseData = existingCase as { id: string; case_number: string; assigned_to: string | null; status: string; created_by: string | null; version: number };
 
     // PERMISSION CHECK:
     // - Managers can edit any case
@@ -157,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const isCreator = existingCaseData.created_by === user.id;
     const isAssignedUser = existingCaseData.assigned_to === user.id;
 
-    if (userRole !== 'manager' && userRole !== 'admin' && userRole !== 'super_admin' && !isCreator && !isAssignedUser) {
+    if (userRole !== 'manager' && userRole !== 'super_admin' && !isCreator && !isAssignedUser) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის რედაქტირების უფლება' } },
         { status: 403 }
@@ -166,6 +179,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Parse and validate request body
     const body = await request.json();
+
+    // Optimistic locking: client must send the version they loaded
+    const clientVersion = typeof body.version === 'number' ? body.version : null;
+    if (clientVersion !== null && clientVersion !== existingCaseData.version) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'VERSION_CONFLICT',
+            message: 'ქეისი სხვის მიერ შეიცვალა. გთხოვთ, განაახლოთ გვერდი.',
+            current_version: existingCaseData.version,
+          }
+        },
+        { status: 409 }
+      );
+    }
+
     const validationResult = caseSchema.safeParse(body);
     
     if (!validationResult.success) {
@@ -202,7 +232,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // IMPORTANT: Only managers/admins/super_admins can reassign cases
     let newAssignedTo = caseData.assigned_to;
-    if (userRole !== 'manager' && userRole !== 'admin' && userRole !== 'super_admin') {
+    if (userRole !== 'manager' && userRole !== 'super_admin') {
       // Non-managers cannot reassign cases - keep original assignment
       newAssignedTo = existingCaseData.assigned_to || undefined;
     }
@@ -233,12 +263,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updated_at: new Date().toISOString(),
     };
 
-    // Update case
+    // Update case — include version in the WHERE clause so that if another
+    // write slipped in between our SELECT and this UPDATE, the update finds
+    // zero rows and we return a conflict.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedCase, error } = await (supabase
-      .from('cases') as any)
+    const updateQuery = (supabase.from('cases') as any)
       .update(updateData)
-      .eq('id', id)
+      .eq('id', id);
+    if (clientVersion !== null) {
+      updateQuery.eq('version', clientVersion);
+    }
+    const { data: updatedCase, error } = await updateQuery
       .select(`
         *,
         client:partners!cases_client_id_fkey(id, name),
@@ -361,7 +396,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // PERMISSION CHECK: Managers/admins/super_admins or case creators can delete
     const isCreator = existingCaseData.created_by === user.id;
-    if (userRole !== 'manager' && userRole !== 'admin' && userRole !== 'super_admin' && !isCreator) {
+    if (userRole !== 'manager' && userRole !== 'super_admin' && !isCreator) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'თქვენ არ გაქვთ ამ ქეისის წაშლის უფლება' } },
         { status: 403 }

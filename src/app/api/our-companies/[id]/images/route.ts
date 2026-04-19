@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { verifyFileMagicBytes, isUuid } from '@/lib/file-validation';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -90,6 +91,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!fileExt || !validExtensions[file.type]?.includes(fileExt)) {
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის გაფართოება არ ემთხვევა ტიპს' } },
+        { status: 400 }
+      );
+    }
+
+    // Also verify the file actually matches its declared type (magic bytes)
+    if (!isUuid(companyId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'არასწორი კომპანიის ID' } },
+        { status: 400 }
+      );
+    }
+    const magicBytesValid = await verifyFileMagicBytes(file, file.type);
+    if (!magicBytesValid) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'ფაილის შიგთავსი არ ემთხვევა ტიპს' } },
         { status: 400 }
       );
     }

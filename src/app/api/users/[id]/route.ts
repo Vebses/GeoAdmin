@@ -42,10 +42,26 @@ export async function GET(
       );
     }
 
+    // Get current user's role to decide what to return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: currentUserRow } = await (supabase
+      .from('users') as any)
+      .select('role')
+      .eq('id', authUser.id)
+      .single();
+    const currentUserRole = currentUserRow?.role as string | undefined;
+
+    const isAdmin = currentUserRole === 'super_admin' || currentUserRole === 'manager';
+    const isSelf = authUser.id === id;
+
+    // Admin or self: return full profile; others: public subset only
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: user, error } = await (supabase
       .from('users') as any)
-      .select('*')
+      .select(isAdmin || isSelf
+        ? '*'
+        : 'id, full_name, role, avatar_url, is_active'
+      )
       .eq('id', id)
       .single();
 
@@ -54,6 +70,12 @@ export async function GET(
         { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
         { status: 404 }
       );
+    }
+
+    // Never leak internal tokens even for admin/self reads
+    if (isAdmin || isSelf) {
+      delete (user as Record<string, unknown>).reset_token;
+      delete (user as Record<string, unknown>).invitation_token;
     }
 
     return NextResponse.json({ success: true, data: user });

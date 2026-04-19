@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getSignedFileUrl, extractStoragePath } from '@/lib/storage-urls';
+import { canAccessCase } from '@/lib/case-access';
 
 interface RouteParams {
   params: Promise<{ id: string; docId: string }>;
@@ -20,6 +22,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
+      );
+    }
+
     const { data, error } = await supabase
       .from('case_documents')
       .select(`
@@ -37,9 +48,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Replace stored path with fresh signed URL
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const docData = data as any;
+    const signedUrl = await getSignedFileUrl(supabase, docData.file_url);
+    const docWithSignedUrl = {
+      ...docData,
+      file_url: signedUrl || docData.file_url,
+    };
+
     return NextResponse.json({
       success: true,
-      data,
+      data: docWithSignedUrl,
     });
   } catch (error) {
     console.error('Case document GET error:', error);
@@ -65,6 +85,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Enforce case ownership
+    const allowed = await canAccessCase(supabase, user.id, caseId);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'ქეისი ვერ მოიძებნა ან არ გაქვთ წვდომა' } },
+        { status: 404 }
+      );
+    }
+
     // Get document to get file_url for storage deletion
     const { data: document, error: findError } = await supabase
       .from('case_documents')
@@ -87,14 +116,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .eq('id', caseId)
       .single();
 
-    // Delete from storage
+    // Delete from storage using the path helper (handles both legacy URLs and new paths)
     try {
-      const fileUrl = (document as any).file_url;
-      const urlParts = fileUrl.split('/geoadmin-files/');
-      if (urlParts[1]) {
-        await supabase.storage
-          .from('geoadmin-files')
-          .remove([urlParts[1]]);
+      const path = extractStoragePath((document as any).file_url);
+      if (path) {
+        await supabase.storage.from('geoadmin-files').remove([path]);
       }
     } catch (storageError) {
       console.error('Storage delete error:', storageError);
