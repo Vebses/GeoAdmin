@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/dashboard';
+  // Sanitize — only accept same-origin relative paths, fall back to /dashboard
+  const next = safeInternalPath(searchParams.get('next'), '/dashboard');
 
   if (code) {
     const supabase = await createClient();
@@ -13,17 +15,12 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Handle different callback types
       if (type === 'recovery') {
-        // Password reset - redirect to reset password page
         return NextResponse.redirect(`${origin}/reset-password`);
       }
-
-      // Default: redirect to dashboard or specified page
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  // Return the user to an error page with some instructions
   return NextResponse.redirect(`${origin}/login?error=auth_callback_error`);
 }

@@ -198,9 +198,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Calculate totals
-    const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);
-    const franchiseAmount = invoiceData.franchise_amount || 0;
+    // Calculate totals — defensively clamp franchise to non-negative and validate services.
+    // Zod schema already enforces this, but belt + braces in case a direct SDK call bypasses it.
+    const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + Math.max(0, service.total || 0), 0);
+    const franchiseAmount = Math.max(0, invoiceData.franchise_amount || 0);
     const total = subtotal - franchiseAmount;
 
     // Build insert object matching database schema
@@ -285,15 +286,16 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Invoices POST error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Do NOT leak raw error messages to clients — may expose DB schema or stack info.
+    // Log the detail server-side, return a generic message.
+    console.error('Internal error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: { 
-          code: 'SERVER_ERROR', 
+      {
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
           message: 'სერვერის შეცდომა',
-          details: errorMessage
-        } 
+        }
       },
       { status: 500 }
     );

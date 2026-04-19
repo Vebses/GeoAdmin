@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { verifyFileMagicBytes, isUuid } from '@/lib/file-validation';
+import { getSignedFileUrl } from '@/lib/storage-urls';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -142,17 +143,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('geoadmin-files')
-      .getPublicUrl(uniqueName);
-
-    // Update company with new image URL
+    // Store the STORAGE PATH (not public URL) — bucket is private, signed URLs are generated on read.
+    // Company logos/signatures/stamps are sensitive and must not be world-readable.
     const updateField = `${imageType}_url`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = await (supabase.from('our_companies') as any)
-      .update({ 
-        [updateField]: urlData.publicUrl,
+      .update({
+        [updateField]: uniqueName,
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId);
@@ -165,18 +162,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Return a fresh signed URL for immediate UI display
+    const signedUrl = await getSignedFileUrl(supabase, uniqueName);
+
     return NextResponse.json({
       success: true,
       data: {
-        url: urlData.publicUrl,
+        url: signedUrl || uniqueName,
         type: imageType,
       },
     });
   } catch (error) {
     console.error('Company images POST error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: `სერვერის შეცდომა: ${errorMessage}` } },
+      { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
     );
   }

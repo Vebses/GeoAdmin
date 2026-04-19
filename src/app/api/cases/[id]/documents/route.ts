@@ -288,14 +288,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 });
   } catch (error) {
     console.error('Case documents POST error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { 
-        success: false, 
-        error: { 
-          code: 'SERVER_ERROR', 
-          message: `სერვერის შეცდომა: ${errorMessage}` 
-        } 
+      {
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: 'სერვერის შეცდომა',
+        }
       },
       { status: 500 }
     );

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
+import { logPartnerActivity } from '@/lib/activity-logs';
 
 export async function GET(
   request: Request,
@@ -93,6 +94,18 @@ export async function PUT(
 
     if (error) throw error;
 
+    // Audit trail
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const partner = data as any;
+    await logPartnerActivity(
+      auth.user.id,
+      undefined,
+      'updated',
+      id,
+      partner?.name || '',
+      { fields: Object.keys(validationResult.data) }
+    );
+
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Partner PUT error:', error);
@@ -116,6 +129,14 @@ export async function DELETE(
 
     const supabase = await createClient();
 
+    // Snapshot for audit log
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: snapshot } = await (supabase
+      .from('partners') as any)
+      .select('name, legal_name, id_code')
+      .eq('id', id)
+      .single();
+
     // Soft delete
     const { error } = await (supabase
       .from('partners') as any)
@@ -123,6 +144,16 @@ export async function DELETE(
       .eq('id', id);
 
     if (error) throw error;
+
+    // Audit trail
+    await logPartnerActivity(
+      auth.user.id,
+      undefined,
+      'deleted',
+      id,
+      snapshot?.name || '',
+      { snapshot }
+    );
 
     return NextResponse.json({ success: true, message: 'პარტნიორი წაშლილია' });
   } catch (error) {

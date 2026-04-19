@@ -22,10 +22,20 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+// Accept only same-origin relative paths to prevent open redirect after login
+function safeRedirectPath(input: string | null, fallback = '/dashboard'): string {
+  if (!input) return fallback;
+  if (input.startsWith('//')) return fallback;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(input)) return fallback; // reject http:, javascript:, etc.
+  if (!input.startsWith('/')) return fallback;
+  if (input.includes('\\')) return fallback;
+  return input;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+  const redirectTo = safeRedirectPath(searchParams.get('redirectTo'));
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

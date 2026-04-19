@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { revokeAllUserSessions } from '@/lib/sessions';
+import { logUserActivity } from '@/lib/activity-logs';
 
 // Role hierarchy for permission checks
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -177,6 +179,32 @@ export async function PUT(
       );
     }
 
+    // Audit trail — critical for role changes
+    const roleChanged = role && role !== targetUserRole;
+    if (roleChanged || Object.keys(updateData).length > 0) {
+      await logUserActivity(
+        authUser.id,
+        undefined,
+        'updated',
+        id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (updatedUser as any)?.full_name,
+        {
+          role_changed: roleChanged,
+          old_role: roleChanged ? targetUserRole : undefined,
+          new_role: roleChanged ? role : undefined,
+          fields_updated: Object.keys(updateData),
+        }
+      );
+
+      // Role change = force logout of that user so they re-auth with new permissions
+      if (roleChanged) {
+        await revokeAllUserSessions(supabase, id).catch(err =>
+          console.error('Session revoke after role change failed:', err)
+        );
+      }
+    }
+
     return NextResponse.json({ success: true, data: updatedUser });
   } catch (error) {
     console.error('User PUT error:', error);
@@ -247,6 +275,14 @@ export async function DELETE(
       );
     }
 
+    // Snapshot the user's original values for audit log
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: snapshot } = await (supabase
+      .from('users') as any)
+      .select('full_name, email, role, is_active')
+      .eq('id', id)
+      .single();
+
     // Soft delete by deactivating and anonymizing
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase
@@ -261,6 +297,21 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    // Force logout — deactivated user must not remain logged in
+    await revokeAllUserSessions(supabase, id).catch(err =>
+      console.error('Session revoke on deactivate failed:', err)
+    );
+
+    // Audit trail — deactivation is a privileged action
+    await logUserActivity(
+      authUser.id,
+      undefined,
+      'deleted',
+      id,
+      snapshot?.full_name || snapshot?.email,
+      { deactivated: true, previous_state: snapshot }
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

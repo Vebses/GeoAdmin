@@ -190,10 +190,12 @@ export async function PUT(request: Request, context: RouteContext) {
     let updateObject: Record<string, unknown> = { ...invoiceUpdateData };
     
     if (services && services.length > 0) {
-      const subtotal = services.reduce((sum: number, service: { total: number }) => sum + service.total, 0);
-      const franchiseAmount = updateData.franchise_amount ?? 0;
+      // Clamp to non-negative values defensively
+      const subtotal = services.reduce((sum: number, service: { total: number }) => sum + Math.max(0, service.total || 0), 0);
+      const franchiseAmount = Math.max(0, updateData.franchise_amount ?? 0);
       updateObject.subtotal = subtotal;
       updateObject.total = Math.max(0, subtotal - franchiseAmount);
+      updateObject.franchise = franchiseAmount;
     }
 
     updateObject.updated_at = new Date().toISOString();

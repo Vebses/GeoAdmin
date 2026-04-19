@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { sendPasswordResetEmail } from '@/lib/email/auth';
 import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { hashToken, generateSecureToken } from '@/lib/token-utils';
+import { getCanonicalOrigin } from '@/lib/safe-redirect';
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,7 +59,9 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id);
 
     // Build reset URL
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    // NEVER trust the client-supplied Origin header — it can be forged to send users a
+    // reset email containing a link to an attacker-controlled domain.
+    const origin = getCanonicalOrigin();
     const resetUrl = `${origin}/reset-password?token=${resetToken}`;
 
     // Send styled email

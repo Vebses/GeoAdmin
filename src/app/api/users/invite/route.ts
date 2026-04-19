@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import { hashToken, generateSecureToken } from '@/lib/token-utils';
+import { getCanonicalOrigin } from '@/lib/safe-redirect';
 
 // Role hierarchy for permission checks
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -125,7 +126,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Build invitation URL
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    // NEVER trust client Origin header — always use canonical server-configured origin
+    const origin = getCanonicalOrigin();
     const inviteUrl = `${origin}/accept-invite?token=${inviteToken}`;
 
     // Send invitation email

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
+import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
 import type { OurCompany } from '@/types';
 
 // Roles that can manage our companies
@@ -27,9 +28,27 @@ export async function GET() {
 
     if (error) throw error;
 
+    // Companies may store logo/signature/stamp as storage paths; resolve to signed URLs
+    const companies = (data || []) as Array<{
+      logo_url?: string | null;
+      signature_url?: string | null;
+      stamp_url?: string | null;
+    } & OurCompany>;
+    const allPaths: (string | null | undefined)[] = [];
+    for (const c of companies) {
+      allPaths.push(c.logo_url, c.signature_url, c.stamp_url);
+    }
+    const signedMap = await getSignedFileUrls(supabase, allPaths);
+    const withSigned = companies.map(c => ({
+      ...c,
+      logo_url: signedMap.get(extractStoragePath(c.logo_url) || '') || c.logo_url,
+      signature_url: signedMap.get(extractStoragePath(c.signature_url) || '') || c.signature_url,
+      stamp_url: signedMap.get(extractStoragePath(c.stamp_url) || '') || c.stamp_url,
+    }));
+
     return NextResponse.json({
       success: true,
-      data: data as OurCompany[],
+      data: withSigned as OurCompany[],
     });
   } catch (error) {
     console.error('Our Companies GET error:', error);

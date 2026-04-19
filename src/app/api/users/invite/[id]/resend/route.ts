@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
-import crypto from 'crypto';
+import { hashToken, generateSecureToken } from '@/lib/token-utils';
+import { getCanonicalOrigin } from '@/lib/safe-redirect';
 
 // Roles that can manage invitations
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -67,8 +68,8 @@ export async function POST(
       fullName = invitation.full_name;
 
       // Generate new token and update expiration
-      const inviteToken = crypto.randomBytes(32).toString('hex');
-      const inviteTokenHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
+      const inviteToken = generateSecureToken(32);
+      const inviteTokenHash = hashToken(inviteToken);
       const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,8 +89,8 @@ export async function POST(
         );
       }
 
-      // Build invitation URL and send email
-      const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // Build invitation URL using canonical server-configured origin (NEVER trust Origin header)
+      const origin = getCanonicalOrigin();
       const inviteUrl = `${origin}/accept-invite?token=${inviteToken}`;
 
       await sendInvitationEmail({
@@ -121,8 +122,8 @@ export async function POST(
       fullName = invitation.full_name;
 
       // Generate new token and update expiration
-      const inviteToken = crypto.randomBytes(32).toString('hex');
-      const inviteTokenHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
+      const inviteToken = generateSecureToken(32);
+      const inviteTokenHash = hashToken(inviteToken);
       const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,8 +143,8 @@ export async function POST(
         );
       }
 
-      // Build invitation URL and send email
-      const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // Build invitation URL using canonical server-configured origin (NEVER trust Origin header)
+      const origin = getCanonicalOrigin();
       const inviteUrl = `${origin}/accept-invite?token=${inviteToken}`;
 
       await sendInvitationEmail({

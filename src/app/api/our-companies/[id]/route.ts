@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
+import { getSignedFileUrl } from '@/lib/storage-urls';
 
 // Roles that can manage our companies
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -37,7 +38,22 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    // Resolve stored paths to signed URLs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = data as any;
+    const [logo_url, signature_url, stamp_url] = await Promise.all([
+      getSignedFileUrl(supabase, c.logo_url),
+      getSignedFileUrl(supabase, c.signature_url),
+      getSignedFileUrl(supabase, c.stamp_url),
+    ]);
+    const withSigned = {
+      ...c,
+      logo_url: logo_url || c.logo_url,
+      signature_url: signature_url || c.signature_url,
+      stamp_url: stamp_url || c.stamp_url,
+    };
+
+    return NextResponse.json({ success: true, data: withSigned });
   } catch (error) {
     console.error('Our Company GET error:', error);
     return NextResponse.json(

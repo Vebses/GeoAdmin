@@ -53,17 +53,43 @@ export async function POST(request: Request, context: RouteContext) {
 
     // Parse optional body
     const body = await request.json().catch(() => ({}));
-    const { payment_reference, payment_notes } = body as { 
+    const { payment_reference, payment_notes, paid_amount } = body as {
       payment_reference?: string;
       payment_notes?: string;
+      paid_amount?: number;
     };
+
+    // Validate paid_amount (if provided) — must be non-negative and <= invoice total + 1% tolerance
+    let validatedPaidAmount: number | null = null;
+    if (paid_amount !== undefined && paid_amount !== null) {
+      if (typeof paid_amount !== 'number' || !Number.isFinite(paid_amount) || paid_amount < 0) {
+        return NextResponse.json(
+          { success: false, error: { code: 'INVALID_AMOUNT', message: 'გადახდის თანხა უნდა იყოს არაუარყოფითი რიცხვი' } },
+          { status: 400 }
+        );
+      }
+      // Allow 1% overpayment tolerance (rounding, fees). Reject more than that.
+      const maxAllowed = (invoiceData.total || 0) * 1.01;
+      if (paid_amount > maxAllowed) {
+        return NextResponse.json(
+          { success: false, error: { code: 'AMOUNT_TOO_HIGH', message: 'გადახდის თანხა აღემატება ინვოისის ჯამს' } },
+          { status: 400 }
+        );
+      }
+      validatedPaidAmount = paid_amount;
+    }
+
+    // Sanitize optional text fields
+    const safeRef = typeof payment_reference === 'string' ? payment_reference.trim().substring(0, 200) : null;
+    const safeNotes = typeof payment_notes === 'string' ? payment_notes.substring(0, 2000) : null;
 
     // Update invoice
     const updateData = {
       status: 'paid' as const,
       paid_at: new Date().toISOString(),
-      payment_reference: payment_reference || null,
-      payment_notes: payment_notes || null,
+      paid_amount: validatedPaidAmount ?? invoiceData.total,
+      payment_reference: safeRef || null,
+      payment_notes: safeNotes || null,
       updated_at: new Date().toISOString(),
     };
 

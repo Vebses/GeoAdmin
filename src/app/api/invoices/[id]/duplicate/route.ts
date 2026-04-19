@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth, isAuthError, FINANCE_ROLES } from '@/lib/auth-utils';
+import { canAccessInvoice } from '@/lib/case-access';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -42,6 +43,15 @@ export async function POST(request: Request, context: RouteContext) {
     if (isAuthError(auth)) return auth.response;
 
     const supabase = await createClient();
+
+    // Enforce invoice ownership — prevents IDOR
+    const allowed = await canAccessInvoice(supabase, auth.user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის წვდომა' } },
+        { status: 403 }
+      );
+    }
 
     // Get original invoice with services
     const { data: originalInvoice, error: fetchError } = await supabase

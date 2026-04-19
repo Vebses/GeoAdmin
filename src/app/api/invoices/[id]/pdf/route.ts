@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateInvoicePDF, generatePDFFilename, getContentDisposition } from '@/lib/pdf';
+import { canAccessInvoice } from '@/lib/case-access';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface RouteParams {
@@ -18,6 +19,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Enforce invoice ownership — prevents IDOR on PDF download
+    const allowed = await canAccessInvoice(supabase, user.id, id);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'არ გაქვთ ამ ინვოისის წვდომა' } },
+        { status: 403 }
       );
     }
 

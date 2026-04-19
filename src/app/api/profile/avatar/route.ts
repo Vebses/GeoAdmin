@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { verifyFileMagicBytes } from '@/lib/file-validation';
+import { logActivity } from '@/lib/activity-logs';
 
 // POST /api/profile/avatar - Upload avatar
 export async function POST(request: NextRequest) {
   try {
+    // Auth first — need user before we can associate file
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
@@ -14,11 +26,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
+    // Strict MIME whitelist (no SVG — XSS vector)
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_TYPE', message: 'Invalid file type. Use JPEG, PNG, or WebP' } },
+        { status: 400 }
+      );
+    }
+
+    // Magic-byte validation — defeats Content-Type spoofing
+    const magicOk = await verifyFileMagicBytes(file, file.type);
+    if (!magicOk) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_CONTENT', message: 'File content does not match declared type' } },
         { status: 400 }
       );
     }
@@ -32,18 +53,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
-    }
-
-    // Generate unique filename
-    const ext = file.name.split('.').pop() || 'jpg';
+    // Generate unique filename — sanitize extension strictly
+    const extRaw = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const ext = /^[a-z0-9]{1,5}$/.test(extRaw) ? extRaw : 'jpg';
     const fileName = `${user.id}.${ext}`;
     const filePath = `avatars/${fileName}`;
 

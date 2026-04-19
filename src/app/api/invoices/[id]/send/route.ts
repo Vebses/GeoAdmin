@@ -267,13 +267,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error('Send invoice error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: { 
-          code: 'SERVER_ERROR', 
+      {
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
           message: 'სერვერის შეცდომა',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        } 
+        }
       },
       { status: 500 }
     );
