@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { InvoiceServicesEditor } from './invoice-services-editor';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
+import { countryDisplayName } from '@/lib/countries';
 import type { 
   CurrencyCode, 
   InvoiceLanguage, 
@@ -368,7 +369,7 @@ export function InvoiceStepDetails({
                   <div className="mt-2 text-gray-600 space-y-0.5 text-[10px]">
                     <p className="font-semibold text-gray-900">{selectedSender?.legal_name || selectedSender?.name || '—'}</p>
                     {selectedSender?.id_code && <p>ს/კ: {selectedSender.id_code}</p>}
-                    <p>{selectedSender?.country || 'საქართველო'}, {selectedSender?.city || 'თბილისი'}</p>
+                    <p>{countryDisplayName(selectedSender?.country) || 'საქართველო'}, {selectedSender?.city || 'თბილისი'}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -395,7 +396,7 @@ export function InvoiceStepDetails({
                   {selectedRecipient?.id_code && <p className="text-gray-600 text-[10px]">ს/კ: {selectedRecipient.id_code}</p>}
                   {selectedRecipient?.address && <p className="text-gray-600 text-[10px]">{selectedRecipient.address}</p>}
                   {(selectedRecipient?.city || selectedRecipient?.country) && (
-                    <p className="text-gray-600 text-[10px]">{[selectedRecipient.city, selectedRecipient.country].filter(Boolean).join(', ')}</p>
+                    <p className="text-gray-600 text-[10px]">{[selectedRecipient.city, countryDisplayName(selectedRecipient.country)].filter(Boolean).join(', ')}</p>
                   )}
                 </div>
                 <div>

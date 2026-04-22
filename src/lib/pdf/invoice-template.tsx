@@ -7,6 +7,7 @@ import {
   Image,
   StyleSheet,
 } from '@react-pdf/renderer';
+import { countryDisplayName } from '@/lib/countries';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, CurrencyCode } from '@/types';
 
 // Translations - Georgian and English
@@ -429,7 +430,7 @@ export function InvoicePDF({
             <Text style={styles.companyName}>{sender.legal_name || sender.name}</Text>
             <Text style={styles.companyDetail}>{t.idCode}: {sender.id_code}</Text>
             <Text style={styles.companyDetail}>{sender.address}</Text>
-            <Text style={styles.companyDetail}>{sender.city}, {sender.country}</Text>
+            <Text style={styles.companyDetail}>{[sender.city, countryDisplayName(sender.country, language)].filter(Boolean).join(', ')}</Text>
             <Text style={styles.companyDetail}>{sender.email}</Text>
             <Text style={styles.companyDetail}>{sender.phone}</Text>
           </View>
@@ -457,7 +458,7 @@ export function InvoicePDF({
             )}
             {(recipient.city || recipient.country) && (
               <Text style={styles.partyDetail}>
-                {[recipient.city, recipient.country].filter(Boolean).join(', ')}
+                {[recipient.city, countryDisplayName(recipient.country, language)].filter(Boolean).join(', ')}
               </Text>
             )}
           </View>

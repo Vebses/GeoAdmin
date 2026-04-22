@@ -9,14 +9,17 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// Valid case status transitions
+// Valid case status transitions.
+// Managers/creators can reopen completed or cancelled cases — medical data sometimes
+// needs to be edited after closing (corrections, late paperwork, re-evaluation).
+// The `closed_at` timestamp is cleared when transitioning out of a terminal state.
 const VALID_CASE_STATUS_TRANSITIONS: Record<string, string[]> = {
-  draft: ['in_progress', 'cancelled'],
-  in_progress: ['paused', 'delayed', 'completed', 'cancelled'],
-  paused: ['in_progress', 'cancelled'],
-  delayed: ['in_progress', 'cancelled'],
-  completed: [], // No transitions from completed
-  cancelled: ['draft'], // Can revert to draft
+  draft: ['in_progress', 'paused', 'delayed', 'completed', 'cancelled'],
+  in_progress: ['draft', 'paused', 'delayed', 'completed', 'cancelled'],
+  paused: ['draft', 'in_progress', 'delayed', 'completed', 'cancelled'],
+  delayed: ['draft', 'in_progress', 'paused', 'completed', 'cancelled'],
+  completed: ['draft', 'in_progress', 'paused', 'delayed', 'cancelled'], // reopenable
+  cancelled: ['draft', 'in_progress', 'paused', 'delayed', 'completed'], // reopenable
 };
 
 function isValidCaseStatusTransition(current: string, next: string): boolean {
@@ -237,8 +240,38 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       newAssignedTo = existingCaseData.assigned_to || undefined;
     }
 
+    // Handle case_number change (user-visible identifier — the internal id (UUID) stays immutable).
+    // Only include case_number in update if client actually sent a value; if unchanged, skip uniqueness check.
+    let caseNumberUpdate: { case_number: string } | Record<string, never> = {};
+    const submittedCaseNumber = caseData.case_number?.trim();
+    if (submittedCaseNumber && submittedCaseNumber !== existingCaseData.case_number) {
+      // Enforce format (same regex as Zod schema): min 3 chars, uppercase alphanumeric + hyphen
+      if (!/^[A-Z0-9-]{3,20}$/.test(submittedCaseNumber)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'INVALID_CASE_NUMBER', message: 'ქეისის ნომერი უნდა იყოს 3-20 სიმბოლო (მხოლოდ დიდი ასოები, ციფრები და ტირე)' } },
+          { status: 400 }
+        );
+      }
+      // Uniqueness check across active + soft-deleted cases
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: duplicate } = await (supabase.from('cases') as any)
+        .select('id')
+        .eq('case_number', submittedCaseNumber)
+        .neq('id', id)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (duplicate) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DUPLICATE_CASE_NUMBER', message: 'ამ ნომრით ქეისი უკვე არსებობს' } },
+          { status: 400 }
+        );
+      }
+      caseNumberUpdate = { case_number: submittedCaseNumber };
+    }
+
     // Build update object
     const updateData = {
+      ...caseNumberUpdate,
       status: caseData.status,
       priority: caseData.priority,
       patient_name: caseData.patient_name,

@@ -178,24 +178,16 @@ export function CaseEditPanel({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>ქეისის ნომერი {!isEdit && <span className="text-gray-400 font-normal">(ოპციონალური)</span>}</Label>
-                {isEdit ? (
-                  <Input
-                    value={caseData?.case_number || ''}
-                    disabled
-                    className="bg-gray-50"
-                  />
-                ) : (
-                  <>
-                    <Input
-                      {...register('case_number')}
-                      placeholder="ავტომატურად შეივსება"
-                      className="placeholder:text-gray-400"
-                    />
-                    <p className="text-[10px] text-gray-500">
-                      ცარიელი დატოვეთ ავტომატური გენერაციისთვის (GEO-YYYY-0001)
-                    </p>
-                  </>
-                )}
+                <Input
+                  {...register('case_number')}
+                  placeholder={isEdit ? '' : 'ავტომატურად შეივსება'}
+                  className="placeholder:text-gray-400"
+                />
+                <p className="text-[10px] text-gray-500">
+                  {isEdit
+                    ? 'ნომრის შეცვლა არ შეცვლის შიდა იდენტიფიკატორს — ინვოისები და ფაილები დაკავშირებული დარჩება.'
+                    : 'ცარიელი დატოვეთ ავტომატური გენერაციისთვის (GEO-YYYY-0001)'}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>სტატუსი</Label>

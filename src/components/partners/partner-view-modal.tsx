@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils/format';
+import { countryDisplayName } from '@/lib/countries';
 import type { PartnerWithRelations } from '@/types';
 
 type CurrencyCode = 'GEL' | 'USD' | 'EUR';
@@ -163,7 +164,7 @@ export function PartnerViewModal({
 
   if (!isOpen || !partner) return null;
 
-  const fullAddress = [partner.address, partner.city, partner.country]
+  const fullAddress = [partner.address, partner.city, countryDisplayName(partner.country)]
     .filter(Boolean)
     .join(', ');
 

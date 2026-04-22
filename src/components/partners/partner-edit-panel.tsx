@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SlidePanel } from '@/components/ui/slide-panel';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { CountryCombobox } from '@/components/ui/country-combobox';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { partnerSchema, type PartnerFormData } from '@/lib/utils/validation';
 import { useCategories } from '@/hooks/use-categories';
 import type { Partner } from '@/types';
@@ -43,6 +45,7 @@ export function PartnerEditPanel({
     reset,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
@@ -51,7 +54,7 @@ export function PartnerEditPanel({
       legal_name: '',
       id_code: '',
       category_id: null,
-      country: 'საქართველო',
+      country: 'ge',
       city: '',
       address: '',
       email: '',
@@ -71,7 +74,7 @@ export function PartnerEditPanel({
           legal_name: partner.legal_name || '',
           id_code: partner.id_code || '',
           category_id: partner.category_id,
-          country: partner.country || 'საქართველო',
+          country: partner.country || 'ge',
           city: partner.city || '',
           address: partner.address || '',
           email: partner.email || '',
@@ -85,7 +88,7 @@ export function PartnerEditPanel({
           legal_name: '',
           id_code: '',
           category_id: null,
-          country: 'საქართველო',
+          country: 'ge',
           city: '',
           address: '',
           email: '',
@@ -203,10 +206,16 @@ export function PartnerEditPanel({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="country">ქვეყანა</Label>
-                <Input
-                  id="country"
-                  {...register('country')}
-                  placeholder="საქართველო"
+                <Controller
+                  name="country"
+                  control={control}
+                  render={({ field }) => (
+                    <CountryCombobox
+                      value={field.value}
+                      onChange={(code) => field.onChange(code || '')}
+                      placeholder="აირჩიეთ ქვეყანა..."
+                    />
+                  )}
                 />
               </div>
               <div className="space-y-1.5">
@@ -250,10 +259,15 @@ export function PartnerEditPanel({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone">ტელეფონი</Label>
-              <Input
-                id="phone"
-                {...register('phone')}
-                placeholder="+995 555 123 456"
+              <Controller
+                name="phone"
+                control={control}
+                render={({ field }) => (
+                  <PhoneInput
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                  />
+                )}
               />
             </div>
             <div className="space-y-1.5">

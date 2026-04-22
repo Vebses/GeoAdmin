@@ -1,21 +1,24 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { toast } from 'sonner';
 import { useUpdateProfile } from '@/hooks/use-profile';
 import type { User } from '@/types';
 
+// Accept any international phone format (starts with + followed by digits/spaces/hyphens/parens)
 const profileSchema = z.object({
   full_name: z.string().min(2, 'სახელი უნდა შეიცავდეს მინიმუმ 2 სიმბოლოს').max(100),
   phone: z.string()
-    .regex(/^(\+995)?[0-9]{9}$/, 'არასწორი ტელეფონის ფორმატი')
+    .max(30)
+    .regex(/^\+?[0-9\s\-()]*$/, 'არასწორი ტელეფონის ფორმატი')
     .optional()
     .nullable()
     .or(z.literal('')),
@@ -46,6 +49,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isDirty },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -107,11 +111,15 @@ export function ProfileForm({ user }: ProfileFormProps) {
         {/* Phone */}
         <div className="space-y-1.5">
           <Label htmlFor="phone" className="text-sm">ტელეფონი</Label>
-          <Input
-            id="phone"
-            {...register('phone')}
-            className="h-10"
-            placeholder="+995599123456"
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <PhoneInput
+                value={field.value || ''}
+                onChange={field.onChange}
+              />
+            )}
           />
           {errors.phone && (
             <p className="text-xs text-red-500">{errors.phone.message}</p>

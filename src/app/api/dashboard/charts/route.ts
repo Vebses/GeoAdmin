@@ -186,15 +186,23 @@ function getDateKey(date: Date, groupBy: string): string {
   }
 }
 
+// Short month names — locale-independent (we format everything as dd/MM across the app)
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function formatLabel(label: string, groupBy: string): string {
   const date = new Date(label);
+  if (isNaN(date.getTime())) return label;
   switch (groupBy) {
-    case 'day':
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    case 'day': {
+      // dd/MM — matches the app's date-format convention
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      return `${day}/${month}`;
+    }
     case 'week':
       return `W${getWeekNumber(date)}`;
     case 'month':
-      return date.toLocaleDateString('en-US', { month: 'short' });
+      return MONTH_SHORT[date.getMonth()] || label;
     default:
       return label;
   }

@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SlidePanel } from '@/components/ui/slide-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { CountryCombobox } from '@/components/ui/country-combobox';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { ourCompanySchema, type OurCompanyFormData } from '@/lib/utils/validation';
 import { cn } from '@/lib/utils';
 import { Upload, X, Image as ImageIcon, PenTool, Stamp, Loader2 } from 'lucide-react';
@@ -171,6 +173,7 @@ export function CompanyEditPanel({
     reset,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = useForm<OurCompanyFormData>({
     resolver: zodResolver(ourCompanySchema),
@@ -178,7 +181,7 @@ export function CompanyEditPanel({
       name: '',
       legal_name: '',
       id_code: '',
-      country: 'საქართველო',
+      country: 'ge',
       city: '',
       address: '',
       email: '',
@@ -207,7 +210,7 @@ export function CompanyEditPanel({
           name: company.name,
           legal_name: company.legal_name,
           id_code: company.id_code,
-          country: company.country || 'საქართველო',
+          country: company.country || 'ge',
           city: company.city || '',
           address: company.address || '',
           email: company.email || '',
@@ -233,7 +236,7 @@ export function CompanyEditPanel({
           name: '',
           legal_name: '',
           id_code: '',
-          country: 'საქართველო',
+          country: 'ge',
           city: '',
           address: '',
           email: '',
@@ -414,10 +417,16 @@ export function CompanyEditPanel({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="country">ქვეყანა</Label>
-                <Input
-                  id="country"
-                  {...register('country')}
-                  placeholder="საქართველო"
+                <Controller
+                  name="country"
+                  control={control}
+                  render={({ field }) => (
+                    <CountryCombobox
+                      value={field.value}
+                      onChange={(code) => field.onChange(code || '')}
+                      placeholder="აირჩიეთ ქვეყანა..."
+                    />
+                  )}
                 />
               </div>
               <div className="space-y-1.5">
@@ -459,10 +468,15 @@ export function CompanyEditPanel({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="phone">ტელეფონი</Label>
-                <Input
-                  id="phone"
-                  {...register('phone')}
-                  placeholder="+995 32 123 45 67"
+                <Controller
+                  name="phone"
+                  control={control}
+                  render={({ field }) => (
+                    <PhoneInput
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </div>
             </div>

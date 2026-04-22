@@ -4,6 +4,7 @@ import { Building, Star, Mail, Phone, Globe, CreditCard, Pencil, Trash2 } from '
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { countryDisplayName } from '@/lib/countries';
 import type { OurCompany } from '@/types';
 
 interface CompanyCardProps {
@@ -51,7 +52,7 @@ export function CompanyCard({ company, onEdit, onDelete }: CompanyCardProps) {
           </p>
           {company.city && (
             <p className="text-xs text-gray-400 mt-0.5">
-              {company.city}, {company.country || 'საქართველო'}
+              {company.city}, {countryDisplayName(company.country) || 'საქართველო'}
             </p>
           )}
         </div>
