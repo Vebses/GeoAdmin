@@ -29,6 +29,7 @@ export interface PhoneConfig {
 
 export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
   // Georgia - Primary
+  // Pattern accepts mobile (starts with 5) AND landline (starts with 3, e.g. Tbilisi 32X XX XX XX)
   GE: {
     code: 'GE',
     dialCode: '+995',
@@ -38,7 +39,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '5XX XX XX XX',
     minDigits: 9,
     maxDigits: 9,
-    pattern: /^[5][0-9]{8}$/, // Georgian mobile starts with 5
+    pattern: /^[0-9]{9}$/,
     format: (digits) => {
       if (digits.length < 3) return digits;
       if (digits.length < 5) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
@@ -95,7 +96,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '5XX XXX XXXX',
     minDigits: 10,
     maxDigits: 10,
-    pattern: /^[5][0-9]{9}$/, // Turkish mobile starts with 5
+    pattern: /^[0-9]{10}$/, // accepts mobile (5XX) or landline
     format: (digits) => {
       if (digits.length < 3) return digits;
       if (digits.length < 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
@@ -114,7 +115,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: 'XX XXX XX XX',
     minDigits: 9,
     maxDigits: 9,
-    pattern: /^[5-7][0-9]{8}$/, // Azerbaijani mobile starts with 5, 6, or 7
+    pattern: /^[0-9]{9}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 2) return digits;
       if (digits.length < 5) return `${digits.slice(0, 2)} ${digits.slice(2)}`;
@@ -151,7 +152,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: 'XXX XXX XX XX',
     minDigits: 10,
     maxDigits: 10,
-    pattern: /^[9][0-9]{9}$/, // Russian mobile starts with 9
+    pattern: /^[0-9]{10}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 3) return digits;
       if (digits.length < 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
@@ -189,7 +190,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '7XXX XXXXXX',
     minDigits: 10,
     maxDigits: 10,
-    pattern: /^7[0-9]{9}$/, // UK mobile starts with 7
+    pattern: /^[0-9]{10}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 4) return digits;
       return `${digits.slice(0, 4)} ${digits.slice(4)}`;
@@ -206,7 +207,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '6 XX XX XX XX',
     minDigits: 9,
     maxDigits: 9,
-    pattern: /^[67][0-9]{8}$/, // French mobile starts with 6 or 7
+    pattern: /^[0-9]{9}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 1) return digits;
       if (digits.length < 3) return `${digits.slice(0, 1)} ${digits.slice(1)}`;
@@ -226,7 +227,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '3XX XXX XXXX',
     minDigits: 10,
     maxDigits: 10,
-    pattern: /^3[0-9]{9}$/, // Italian mobile starts with 3
+    pattern: /^[0-9]{10}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 3) return digits;
       if (digits.length < 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
@@ -244,7 +245,7 @@ export const PHONE_COUNTRIES: Record<CountryCode, PhoneConfig> = {
     placeholder: '6XX XXX XXX',
     minDigits: 9,
     maxDigits: 9,
-    pattern: /^[67][0-9]{8}$/, // Spanish mobile starts with 6 or 7
+    pattern: /^[0-9]{9}$/, // accepts mobile or landline
     format: (digits) => {
       if (digits.length < 3) return digits;
       if (digits.length < 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;

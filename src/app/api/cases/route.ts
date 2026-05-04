@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
     const client_id = searchParams.get('client_id');
     const insurance_id = searchParams.get('insurance_id');
     const search = searchParams.get('search');
+    const opened_from = searchParams.get('opened_from'); // YYYY-MM-DD inclusive
+    const opened_to = searchParams.get('opened_to');     // YYYY-MM-DD inclusive
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
@@ -84,6 +86,16 @@ export async function GET(request: NextRequest) {
       // Sanitize search input to prevent injection
       const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
       query = query.or(`case_number.ilike.%${sanitizedSearch}%,patient_name.ilike.%${sanitizedSearch}%,patient_id.ilike.%${sanitizedSearch}%`);
+    }
+
+    // Date range filter on opened_at — accepts YYYY-MM-DD strings
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (opened_from && isoDate.test(opened_from)) {
+      query = query.gte('opened_at', opened_from);
+    }
+    if (opened_to && isoDate.test(opened_to)) {
+      // Inclusive end-of-day: append T23:59:59 so cases opened on that date match
+      query = query.lte('opened_at', `${opened_to}T23:59:59`);
     }
 
     // Apply pagination

@@ -15,6 +15,10 @@ interface UseCasesParams {
   client_id?: string;
   insurance_id?: string;
   search?: string;
+  /** YYYY-MM-DD — opened_at >= this date */
+  opened_from?: string;
+  /** YYYY-MM-DD — opened_at <= this date (inclusive end-of-day) */
+  opened_to?: string;
   page?: number;
   limit?: number;
   my_cases?: boolean;

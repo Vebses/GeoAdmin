@@ -216,9 +216,9 @@ export function InvoiceServicesEditor({
                         type="number"
                         value={service.unit_price}
                         onChange={(e) => handleUpdateService(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                        min={0}
                         step="0.01"
                         className="h-8 text-xs text-right border-transparent bg-transparent hover:border-gray-200 focus:border-blue-400 focus:bg-white w-full"
+                        title="უარყოფითი ფასი დაშვებულია ფასდაკლებისთვის"
                       />
                     )}
                   </td>

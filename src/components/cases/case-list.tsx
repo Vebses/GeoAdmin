@@ -53,6 +53,9 @@ export function CaseList() {
     assigned_to: initialAssignedTo,
     client_id: null,
     search: '',
+    my_cases: isAssistant, // Assistants default to "my cases"
+    opened_from: null,
+    opened_to: null,
   });
 
   // Update filters when URL params change
@@ -66,15 +69,17 @@ export function CaseList() {
   // Pagination
   const [page, setPage] = useState(1);
 
-  // Data fetching - include my_cases filter for assistants
+  // Data fetching — filters drive everything; viewMode kept for backward compat
   const { data: casesData, isLoading: casesLoading } = useCases({
     status: filters.status || undefined,
     assigned_to: filters.assigned_to || undefined,
     client_id: filters.client_id || undefined,
     search: debouncedSearch || undefined,
+    opened_from: filters.opened_from || undefined,
+    opened_to: filters.opened_to || undefined,
     page,
     limit: ITEMS_PER_PAGE,
-    my_cases: isAssistant && viewMode === 'my' ? true : undefined,
+    my_cases: filters.my_cases || (isAssistant && viewMode === 'my') ? true : undefined,
   });
   const { data: partnersData } = usePartners({});
   const { data: users = [] } = useUsers();
@@ -249,6 +254,7 @@ export function CaseList() {
         partners={partners}
         users={users}
         statusCounts={statusCounts}
+        currentUserId={currentUser?.id}
       />
 
       {/* Cases Table */}

@@ -245,10 +245,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     let caseNumberUpdate: { case_number: string } | Record<string, never> = {};
     const submittedCaseNumber = caseData.case_number?.trim();
     if (submittedCaseNumber && submittedCaseNumber !== existingCaseData.case_number) {
-      // Enforce format (same regex as Zod schema): min 3 chars, uppercase alphanumeric + hyphen
-      if (!/^[A-Z0-9-]{3,20}$/.test(submittedCaseNumber)) {
+      // Enforce format (mirrors Zod schema): 3-40 chars, alphanumeric + / - _ . # and spaces
+      if (!/^[A-Za-z0-9 \-/_.#]{3,40}$/.test(submittedCaseNumber)) {
         return NextResponse.json(
-          { success: false, error: { code: 'INVALID_CASE_NUMBER', message: 'ქეისის ნომერი უნდა იყოს 3-20 სიმბოლო (მხოლოდ დიდი ასოები, ციფრები და ტირე)' } },
+          { success: false, error: { code: 'INVALID_CASE_NUMBER', message: 'ქეისის ნომერი უნდა იყოს 3-40 სიმბოლო (ასოები, ციფრები, /, -, _, ., # და ჰარები)' } },
           { status: 400 }
         );
       }

@@ -57,6 +57,22 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
         ],
       },
+      {
+        // All API responses revalidate — prevents stale client data after deploys
+        source: '/api/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-cache, must-revalidate, max-age=0' },
+        ],
+      },
+      {
+        // App pages must always revalidate so a deploy reaches users on next nav.
+        // Static JS/CSS bundles are content-hashed by Next.js so they're safe to cache long-term;
+        // these rules only apply to HTML responses for dashboard routes.
+        source: '/((?!_next/static|_next/image|favicon.ico|fonts|sounds).*)',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-cache, must-revalidate, max-age=0' },
+        ],
+      },
     ];
   },
   images: {

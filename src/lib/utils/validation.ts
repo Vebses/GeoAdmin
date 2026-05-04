@@ -193,10 +193,10 @@ export const ourCompanySchema = z.object({
 export const caseSchema = z.object({
   case_number: z
     .string()
-    .max(20, 'ქეისის ნომერი ძალიან გრძელია')
+    .max(40, 'ქეისის ნომერი ძალიან გრძელია')
     .refine(
-      (val) => !val || val.length === 0 || (val.length >= 3 && /^[A-Z0-9-]+$/.test(val)),
-      'ქეისის ნომერი უნდა იყოს მინიმუმ 3 სიმბოლო (მხოლოდ დიდი ასოები, ციფრები და ტირე)'
+      (val) => !val || val.length === 0 || (val.length >= 3 && /^[A-Za-z0-9 \-/_.#]+$/.test(val.trim())),
+      'ქეისის ნომერი უნდა იყოს მინიმუმ 3 სიმბოლო (ასოები, ციფრები, "/", "-", "_", ".", "#" და ჰარები)'
     )
     .optional()
     .or(z.literal('')),
@@ -277,7 +277,10 @@ export const caseDocumentSchema = z.object({
 export const invoiceServiceSchema = z.object({
   description: z.string().min(1, 'სერვისის აღწერა აუცილებელია'),
   quantity: z.coerce.number().int().min(1, 'მინიმუმ 1').default(1),
-  unit_price: z.coerce.number().min(0, 'ფასი არ შეიძლება იყოს უარყოფითი'),
+  // Negative unit_price is allowed for discount line items.
+  // The invoice-level total is clamped to >= 0 server-side, so a discount
+  // can reduce the total but never make it negative overall.
+  unit_price: z.coerce.number().min(-999999.99, 'ფასი ძალიან მცირეა').max(999999.99, 'ფასი ძალიან დიდია'),
   total: z.coerce.number(),
 });
 

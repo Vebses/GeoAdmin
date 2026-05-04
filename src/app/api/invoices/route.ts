@@ -198,9 +198,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Calculate totals — defensively clamp franchise to non-negative and validate services.
-    // Zod schema already enforces this, but belt + braces in case a direct SDK call bypasses it.
-    const subtotal = invoiceData.services.reduce((sum: number, service: { total: number }) => sum + Math.max(0, service.total || 0), 0);
+    // Calculate totals.
+    // Service line items can be negative (discount lines); franchise is non-negative.
+    // The final invoice total is clamped to >= 0 below (DB CHECK enforces this too).
+    const subtotal = invoiceData.services.reduce(
+      (sum: number, service: { total: number }) => sum + (service.total || 0),
+      0
+    );
     const franchiseAmount = Math.max(0, invoiceData.franchise_amount || 0);
     const total = subtotal - franchiseAmount;
 
