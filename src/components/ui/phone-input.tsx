@@ -3,6 +3,11 @@
 import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Search, ChevronsUpDown } from 'lucide-react';
+import {
+  formatIncompletePhoneNumber,
+  parsePhoneNumberFromString,
+  type CountryCode as LibCountryCode,
+} from 'libphonenumber-js';
 import { cn } from '@/lib/utils';
 import {
   COUNTRIES,
@@ -11,14 +16,7 @@ import {
   getCountryByCode,
   type Country,
 } from '@/lib/countries';
-import {
-  PHONE_COUNTRIES,
-  parsePhoneNumber as parseKnownPhoneNumber,
-  formatFullPhoneNumber as formatKnownFullPhone,
-  type CountryCode,
-} from '@/lib/utils/phone-config';
 
-// Default to Georgia (most common user). "ge" is the ISO code used everywhere else in countries.ts
 const DEFAULT_COUNTRY_CODE = 'ge';
 
 interface PhoneInputProps {
@@ -29,96 +27,58 @@ interface PhoneInputProps {
   disabled?: boolean;
   error?: boolean;
   className?: string;
-  /** ISO 3166-1 alpha-2 lowercase (e.g. "ge"). Backward-compatible with old uppercase CountryCode. */
+  /** ISO 3166-1 alpha-2 lowercase (e.g. "ge"). */
   defaultCountry?: string;
 }
 
 /**
- * Check if a given ISO code has detailed formatting config (12 countries do).
- * Falls back to generic formatting for the rest.
- */
-function hasDetailedFormat(code: string): code is CountryCode {
-  const upper = code.toUpperCase();
-  return upper in PHONE_COUNTRIES;
-}
-
-/**
- * Generic formatter for countries without explicit format rules.
- * Groups digits in blocks of 3 for readability.
- */
-function formatGenericDigits(digits: string): string {
-  const clean = digits.replace(/\D/g, '');
-  const parts: string[] = [];
-  for (let i = 0; i < clean.length; i += 3) {
-    parts.push(clean.slice(i, i + 3));
-  }
-  return parts.join(' ');
-}
-
-/**
- * Format a phone for any ISO country code.
- * Uses detailed format if available, otherwise generic digit grouping.
- */
-function formatFullPhone(code: string, digits: string): string {
-  const country = getCountryByCode(code);
-  if (!country) return digits;
-
-  if (hasDetailedFormat(code)) {
-    return formatKnownFullPhone(code.toUpperCase() as CountryCode, digits);
-  }
-  const clean = digits.replace(/\D/g, '');
-  const formatted = formatGenericDigits(clean);
-  return `+${country.dialCode} ${formatted}`.trim();
-}
-
-/**
- * Parse a full phone string into { code, digits } for ANY country.
- * Tries the 12 detailed countries first (exact format match), then
- * falls back to matching dial codes across the full country list.
+ * Parse a full international phone into { code (lowercase ISO), digits (national) }.
+ * Uses libphonenumber-js for ~250 countries.
  */
 function parseFullPhone(full: string | null | undefined): { code: string; digits: string } | null {
   if (!full || typeof full !== 'string') return null;
-
-  // Try the detailed-format countries first — highest signal
-  const detailed = parseKnownPhoneNumber(full);
-  if (detailed) {
-    return { code: detailed.countryCode.toLowerCase(), digits: detailed.digits };
-  }
-
-  // Fallback: match any country's dial code (longest prefix wins)
-  const cleaned = full.replace(/\s/g, '');
-  if (!cleaned.startsWith('+')) return null;
-
-  const withoutPlus = cleaned.slice(1);
-  // Sort countries by dial code length (descending) so e.g. "+1868" matches Trinidad before "+1"
-  const sorted = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
-  for (const c of sorted) {
-    if (withoutPlus.startsWith(c.dialCode)) {
-      const digits = withoutPlus.slice(c.dialCode.length).replace(/\D/g, '');
-      return { code: c.code, digits };
-    }
-  }
-  return null;
+  const parsed = parsePhoneNumberFromString(full);
+  if (!parsed || !parsed.country) return null;
+  return { code: parsed.country.toLowerCase(), digits: parsed.nationalNumber };
 }
 
 /**
- * Max digits allowed for the current country.
- * Uses detailed config when available, else E.164 max of 15 minus dial code length.
+ * Format the full international phone string for storage and external display.
+ * Example: ("ge", "555123456") -> "+995 555 12 34 56"
+ */
+function formatFullPhone(code: string, digits: string): string {
+  const cleaned = digits.replace(/\D/g, '');
+  const country = getCountryByCode(code);
+  if (!country) return cleaned ? `+${cleaned}` : '';
+  if (!cleaned) return '';
+  const upper = code.toUpperCase() as LibCountryCode;
+  return formatIncompletePhoneNumber(`+${country.dialCode}${cleaned}`, upper);
+}
+
+/**
+ * Format the national portion for the input field — strips the "+<dial>" prefix.
+ * Example: ("ge", "5551234") -> "555 12 34"
+ */
+function formatNationalDigits(code: string, digits: string): string {
+  const cleaned = digits.replace(/\D/g, '');
+  if (!cleaned) return '';
+  const country = getCountryByCode(code);
+  if (!country) return cleaned;
+  const upper = code.toUpperCase() as LibCountryCode;
+  const intl = formatIncompletePhoneNumber(`+${country.dialCode}${cleaned}`, upper);
+  // Strip the "+<dial>" prefix (with optional space) to leave the national format
+  const prefix = `+${country.dialCode}`;
+  return intl.startsWith(prefix) ? intl.slice(prefix.length).trimStart() : intl;
+}
+
+/**
+ * Max national digits we allow in the input field.
+ * E.164 caps total length at 15 digits including country code.
  */
 function getMaxDigits(code: string): number {
-  if (hasDetailedFormat(code)) {
-    return PHONE_COUNTRIES[code.toUpperCase() as CountryCode].maxDigits;
-  }
   const country = getCountryByCode(code);
   if (!country) return 15;
   return Math.max(4, 15 - country.dialCode.length);
-}
-
-function getPlaceholder(code: string): string {
-  if (hasDetailedFormat(code)) {
-    return PHONE_COUNTRIES[code.toUpperCase() as CountryCode].placeholder;
-  }
-  return 'XXX XXX XXX';
 }
 
 export function PhoneInput({
@@ -129,7 +89,6 @@ export function PhoneInput({
   className,
   defaultCountry = DEFAULT_COUNTRY_CODE,
 }: PhoneInputProps) {
-  // Parse initial value
   const parsed = value ? parseFullPhone(value) : null;
   const initialCode = (parsed?.code || defaultCountry).toLowerCase();
 
@@ -154,7 +113,6 @@ export function PhoneInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  // Reset search when popover closes
   React.useEffect(() => {
     if (!open) setQuery('');
   }, [open]);
@@ -162,9 +120,23 @@ export function PhoneInput({
   const results = React.useMemo(() => searchCountries(query, 200), [query]);
 
   const handleDigitsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, '');
-    const maxLen = getMaxDigits(code);
-    const next = raw.slice(0, maxLen);
+    const raw = e.target.value;
+
+    // Smart paste: if input contains '+', try to detect an international number
+    // and switch country + digits accordingly. Handles e.g. pasting "+375 29 327 07 06"
+    // into a Georgia-defaulted field.
+    if (raw.includes('+')) {
+      const detected = parseFullPhone(raw);
+      if (detected) {
+        setCode(detected.code);
+        setDigits(detected.digits);
+        onChange(formatFullPhone(detected.code, detected.digits));
+        return;
+      }
+    }
+
+    const cleaned = raw.replace(/\D/g, '');
+    const next = cleaned.slice(0, getMaxDigits(code));
     setDigits(next);
     onChange(next ? formatFullPhone(code, next) : '');
   };
@@ -173,18 +145,12 @@ export function PhoneInput({
     const newCode = selected.code;
     setCode(newCode);
     setOpen(false);
-    // Re-truncate digits to new country's max
-    const maxLen = getMaxDigits(newCode);
-    const truncated = digits.slice(0, maxLen);
+    const truncated = digits.slice(0, getMaxDigits(newCode));
     if (truncated !== digits) setDigits(truncated);
-    if (truncated) onChange(formatFullPhone(newCode, truncated));
-    else onChange('');
+    onChange(truncated ? formatFullPhone(newCode, truncated) : '');
   };
 
-  // Display formatted digits in the input field
-  const displayValue = hasDetailedFormat(code)
-    ? PHONE_COUNTRIES[code.toUpperCase() as CountryCode].format(digits)
-    : formatGenericDigits(digits);
+  const displayValue = formatNationalDigits(code, digits);
 
   return (
     <div className={cn('flex', className)}>
@@ -278,7 +244,6 @@ export function PhoneInput({
         value={displayValue}
         onChange={handleDigitsChange}
         disabled={disabled}
-        placeholder={getPlaceholder(code)}
         className={cn(
           'flex h-10 flex-1 min-w-0 rounded-lg rounded-l-none border bg-white px-3 py-2 text-sm transition-all duration-150',
           'placeholder:text-gray-400',
@@ -292,7 +257,3 @@ export function PhoneInput({
     </div>
   );
 }
-
-// Re-export for backwards compatibility
-export { type CountryCode, PHONE_COUNTRIES } from '@/lib/utils/phone-config';
-export { parseFullPhone as parsePhoneNumber };

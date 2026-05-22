@@ -2,6 +2,7 @@
 
 import { Search, X, Calendar, User as UserIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -257,18 +258,16 @@ export function CaseFilters({
       {(activePreset === 'custom' || filters.opened_from || filters.opened_to) && (
         <div className="flex items-center gap-2 text-xs">
           <span className="text-gray-500">თარიღი:</span>
-          <Input
-            type="date"
+          <DateInput
             value={filters.opened_from || ''}
-            onChange={(e) => handleFromDateChange(e.target.value)}
-            className="h-8 w-[150px] text-xs"
+            onChange={handleFromDateChange}
+            className="w-[150px]"
           />
           <span className="text-gray-400">–</span>
-          <Input
-            type="date"
+          <DateInput
             value={filters.opened_to || ''}
-            onChange={(e) => handleToDateChange(e.target.value)}
-            className="h-8 w-[150px] text-xs"
+            onChange={handleToDateChange}
+            className="w-[150px]"
           />
         </div>
       )}

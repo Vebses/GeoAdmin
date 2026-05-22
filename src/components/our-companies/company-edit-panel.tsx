@@ -475,9 +475,13 @@ export function CompanyEditPanel({
                     <PhoneInput
                       value={field.value || ''}
                       onChange={field.onChange}
+                      error={!!errors.phone}
                     />
                   )}
                 />
+                {errors.phone && (
+                  <p className="text-xs text-red-500">{errors.phone.message}</p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
@@ -190,11 +191,9 @@ export function ExportDateRangeModal({
               <Label htmlFor="start-date" className="text-xs text-gray-500 mb-1.5 block">
                 დაწყების თარიღი
               </Label>
-              <Input
-                id="start-date"
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={(e) => handleCustomDateChange('start', e.target.value)}
+                onChange={(iso) => handleCustomDateChange('start', iso)}
                 className="text-sm"
               />
             </div>
@@ -202,11 +201,9 @@ export function ExportDateRangeModal({
               <Label htmlFor="end-date" className="text-xs text-gray-500 mb-1.5 block">
                 დასრულების თარიღი
               </Label>
-              <Input
-                id="end-date"
-                type="date"
+              <DateInput
                 value={endDate}
-                onChange={(e) => handleCustomDateChange('end', e.target.value)}
+                onChange={(iso) => handleCustomDateChange('end', iso)}
                 className="text-sm"
               />
             </div>

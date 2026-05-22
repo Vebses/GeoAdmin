@@ -12,7 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { DateInput } from '@/components/ui/date-input';
 import { PartnerCombobox } from '@/components/ui/partner-combobox';
+import { format as formatDateFns, parse as parseDateFns } from 'date-fns';
 import { CaseActionsEditor } from './case-actions-editor';
 import { CaseDocuments } from './case-documents';
 import { caseSchema, type CaseFormData } from '@/lib/utils/validation';
@@ -240,10 +242,9 @@ export function CaseEditPanel({
                   name="opened_at"
                   control={control}
                   render={({ field }) => (
-                    <Input
-                      type="date"
-                      value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                    <DateInput
+                      value={field.value instanceof Date ? formatDateFns(field.value, 'yyyy-MM-dd') : field.value || ''}
+                      onChange={(iso) => field.onChange(iso ? parseDateFns(iso, 'yyyy-MM-dd', new Date()) : undefined)}
                     />
                   )}
                 />
@@ -368,10 +369,10 @@ export function CaseEditPanel({
                   name="patient_dob"
                   control={control}
                   render={({ field }) => (
-                    <Input
-                      type="date"
-                      value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                    <DateInput
+                      value={field.value instanceof Date ? formatDateFns(field.value, 'yyyy-MM-dd') : field.value || ''}
+                      onChange={(iso) => field.onChange(iso ? parseDateFns(iso, 'yyyy-MM-dd', new Date()) : undefined)}
+                      max={formatDateFns(new Date(), 'yyyy-MM-dd')}
                     />
                   )}
                 />

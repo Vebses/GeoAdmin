@@ -130,7 +130,7 @@ export const partnerSchema = z.object({
   city: z.string().max(100).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
-  phone: z.string().max(50).optional().nullable(),
+  phone: phoneValidation,
   website: z.string().url('არასწორი URL').optional().nullable().or(z.literal('')),
   notes: z.string().max(2000).optional().nullable(),
 });
@@ -171,7 +171,7 @@ export const ourCompanySchema = z.object({
   city: z.string().max(100).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   email: z.string().email('არასწორი ელ-ფოსტა').optional().nullable().or(z.literal('')),
-  phone: z.string().max(50).optional().nullable(),
+  phone: phoneValidation,
   website: z.string().url('არასწორი URL').optional().nullable().or(z.literal('')),
   bank_name: z.string().max(100).optional().nullable(),
   bank_code: z.string().max(20).optional().nullable(),
