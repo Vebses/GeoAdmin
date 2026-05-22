@@ -175,22 +175,26 @@ export async function POST(request: Request) {
 
       invoiceNumber = invoiceNumberData as string;
     } else {
-      // Check if provided invoice number already exists
+      // Check if provided invoice number already exists — including soft-deleted rows.
+      // The UNIQUE index on invoice_number counts every row regardless of deleted_at,
+      // so any match (active or deleted) will collide on INSERT.
       const { data: existingInvoice } = await supabase
         .from('invoices')
-        .select('id')
+        .select('id, deleted_at')
         .eq('invoice_number', invoiceNumber)
-        .is('deleted_at', null)
-        .single();
+        .maybeSingle();
 
       if (existingInvoice) {
+        const isInTrash = !!(existingInvoice as { deleted_at: string | null }).deleted_at;
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'DUPLICATE_INVOICE_NUMBER',
-              message: 'ინვოისის ნომერი უკვე გამოყენებულია',
-              details: { invoice_number: ['ეს ინვოისის ნომერი უკვე არსებობს'] }
+              message: isInTrash
+                ? 'ეს ნომერი დაკავებულია ნაგვის ყუთში არსებული ინვოისით — აღადგინეთ ან აირჩიეთ სხვა ნომერი'
+                : 'ინვოისის ნომერი უკვე გამოყენებულია',
+              details: { invoice_number: [isInTrash ? 'ნომერი ეკუთვნის ნაგვის ყუთში არსებულ ინვოისს' : 'ეს ინვოისის ნომერი უკვე არსებობს'] }
             }
           },
           { status: 400 }
@@ -304,8 +308,8 @@ export async function POST(request: Request) {
         error: {
           code: 'SERVER_ERROR',
           message: 'სერვერის შეცდომა',
-          // Surface a short, non-sensitive hint to the client to aid debugging.
-          // Postgres error codes / supabase error codes are safe to expose; raw stack is not.
+          // Postgres error codes (e.g. 23505 unique violation) are safe to expose
+          // and help the client distinguish DB constraint failures from generic errors.
           ...(err?.code ? { dbCode: err.code } : {}),
         }
       },
