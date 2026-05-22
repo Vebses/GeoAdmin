@@ -75,6 +75,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       recipient: typedInvoice.recipient,
       caseData: typedInvoice.case,
       language: (typedInvoice.language || 'en') as InvoiceLanguage,
+      supabase,
     });
 
     // Generate filename

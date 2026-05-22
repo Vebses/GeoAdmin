@@ -99,6 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       recipient: typedInvoice.recipient,
       caseData: typedInvoice.case,
       language: (typedInvoice.language || 'en') as InvoiceLanguage,
+      supabase,
     });
 
     // Determine recipient email — sanitize and validate before using

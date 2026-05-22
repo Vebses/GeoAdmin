@@ -1,7 +1,9 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { InvoicePDF } from './invoice-template';
 import { registerFonts } from './fonts';
+import { extractStoragePath } from '@/lib/storage-urls';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface GeneratePDFOptions {
@@ -10,53 +12,64 @@ interface GeneratePDFOptions {
   recipient: Partner;
   caseData: CaseWithRelations;
   language?: InvoiceLanguage;
+  /** Optional Supabase client — when provided, company images are downloaded
+   *  directly from storage by path. Without it, falls back to HTTP fetch on a URL. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase?: SupabaseClient<any, 'public', any>;
 }
 
+const COMPANY_IMAGE_BUCKET = 'geoadmin-files';
+
 /**
- * Fetch image and convert to base64 data URI
+ * Resolve a stored image reference (storage path OR full URL) to a base64 data URI.
+ * Prefers direct storage download via the Supabase client (works for paths and avoids
+ * dealing with signed-URL expiry). Falls back to HTTP fetch if no client provided.
  */
-async function fetchImageAsBase64(url: string | null | undefined): Promise<string | undefined> {
-  if (!url) {
-    console.log('No image URL provided');
-    return undefined;
+async function imageToBase64(
+  ref: string | null | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase?: SupabaseClient<any, 'public', any>
+): Promise<string | undefined> {
+  if (!ref) return undefined;
+
+  const isFullUrl = /^https?:\/\//i.test(ref);
+
+  // Prefer storage download when we have a client and a resolvable path
+  if (supabase) {
+    const path = extractStoragePath(ref);
+    if (path) {
+      try {
+        const { data, error } = await supabase.storage.from(COMPANY_IMAGE_BUCKET).download(path);
+        if (error || !data) {
+          console.warn(`Storage download failed for ${path}:`, error);
+        } else {
+          const buffer = Buffer.from(await data.arrayBuffer());
+          const contentType = data.type || 'image/png';
+          return `data:${contentType};base64,${buffer.toString('base64')}`;
+        }
+      } catch (err) {
+        console.error(`Error downloading image from storage ${path}:`, err);
+      }
+    }
   }
-  
-  console.log('Fetching image:', url);
-  
+
+  // Fallback: HTTP fetch — only meaningful if `ref` is a full URL
+  if (!isFullUrl) return undefined;
   try {
-    // For Supabase URLs, we might need to handle them differently
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'image/*',
-      },
-      // Don't follow redirects automatically for debugging
-      redirect: 'follow',
-    });
-    
-    console.log('Image fetch response:', response.status, response.statusText);
-    
+    const response = await fetch(ref, { headers: { Accept: 'image/*' }, redirect: 'follow' });
     if (!response.ok) {
-      console.warn(`Failed to fetch image (${response.status}): ${url}`);
+      console.warn(`Failed to fetch image (${response.status}): ${ref}`);
       return undefined;
     }
-    
-    const contentType = response.headers.get('content-type');
-    console.log('Image content type:', contentType);
-    
-    if (!contentType?.startsWith('image/')) {
+    const contentType = response.headers.get('content-type') || 'image/png';
+    if (!contentType.startsWith('image/')) {
       console.warn(`Invalid content type for image: ${contentType}`);
       return undefined;
     }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
-    
-    console.log('Image fetched successfully, size:', buffer.length, 'bytes');
-    
-    return `data:${contentType};base64,${base64}`;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
   } catch (error) {
-    console.error(`Error fetching image ${url}:`, error);
+    console.error(`Error fetching image ${ref}:`, error);
     return undefined;
   }
 }
@@ -65,31 +78,33 @@ async function fetchImageAsBase64(url: string | null | undefined): Promise<strin
  * Generate PDF buffer from invoice data
  */
 export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<Buffer> {
-  const { invoice, sender, recipient, caseData, language = 'en' } = options;
-
-  console.log('Generating PDF for invoice:', invoice.invoice_number);
-  console.log('Sender logo URL:', sender.logo_url);
-  console.log('Sender signature URL:', sender.signature_url);
-  console.log('Sender stamp URL:', sender.stamp_url);
+  const { invoice, sender, recipient, caseData, language = 'en', supabase } = options;
 
   // Ensure fonts are registered before rendering
   registerFonts();
 
-  // Fetch company images as base64 in parallel
+  // Resolve company images to base64 (direct storage download when client is given,
+  // otherwise HTTP fetch for legacy URL-shaped values).
   const [logoBase64, signatureBase64, stampBase64] = await Promise.all([
-    fetchImageAsBase64(sender.logo_url),
-    fetchImageAsBase64(sender.signature_url),
-    fetchImageAsBase64(sender.stamp_url),
+    imageToBase64(sender.logo_url, supabase),
+    imageToBase64(sender.signature_url, supabase),
+    imageToBase64(sender.stamp_url, supabase),
   ]);
 
-  console.log('Logo fetched:', !!logoBase64);
-  console.log('Signature fetched:', !!signatureBase64);
-  console.log('Stamp fetched:', !!stampBase64);
+  // Strip the raw path/URL out of the sender so the PDF template's fallback
+  // (`logoBase64 || sender.logo_url`) doesn't end up handing react-pdf a bare path,
+  // which would throw and fail the render. If the image fetch above failed, we
+  // pass undefined and the template omits the image.
+  const senderForPdf = {
+    ...sender,
+    logo_url: logoBase64 ? sender.logo_url : null,
+    signature_url: signatureBase64 ? sender.signature_url : null,
+    stamp_url: stampBase64 ? sender.stamp_url : null,
+  };
 
-  // Create the PDF element using createElement
   const pdfElement = React.createElement(InvoicePDF, {
     invoice,
-    sender,
+    sender: senderForPdf,
     recipient,
     caseData,
     language,
@@ -98,10 +113,8 @@ export async function generateInvoicePDF(options: GeneratePDFOptions): Promise<B
     stampBase64,
   });
 
-  // Render to buffer
   try {
     const pdfBuffer = await renderToBuffer(pdfElement);
-    console.log('PDF generated, size:', pdfBuffer.length, 'bytes');
     return Buffer.from(pdfBuffer);
   } catch (renderError) {
     console.error('renderToBuffer failed:', renderError);
