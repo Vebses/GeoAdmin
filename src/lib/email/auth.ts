@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import { createAdminClient } from '@/lib/supabase/server';
+import type { OurCompany } from '@/types';
 import { passwordResetTemplate } from './templates/password-reset';
 import { invitationTemplate, type InvitationTemplateParams } from './templates/invitation';
 
@@ -23,6 +25,39 @@ interface SendEmailResult {
 }
 
 /**
+ * Resolve the FROM address for system emails (password reset, invitations).
+ * Priority: default our_company (is_default = true) > env vars > hardcoded fallback.
+ * Cached in-process so repeated sends don't re-query the DB.
+ */
+let defaultSenderCache: { email: string; name: string } | null = null;
+async function getDefaultSender(): Promise<{ email: string; name: string }> {
+  if (defaultSenderCache) return defaultSenderCache;
+
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from('our_companies')
+      .select('*')
+      .eq('is_default', true)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    const company = data as OurCompany | null;
+    if (company && company.email) {
+      defaultSenderCache = { email: company.email, name: company.name };
+      return defaultSenderCache;
+    }
+  } catch {
+    // Fall through to env / hardcoded fallback
+  }
+
+  return {
+    email: process.env.RESEND_FROM_EMAIL || 'noreply@geoadmin.ge',
+    name: process.env.RESEND_FROM_NAME || 'GeoAdmin',
+  };
+}
+
+/**
  * Send password reset email
  */
 export async function sendPasswordResetEmail(
@@ -31,10 +66,9 @@ export async function sendPasswordResetEmail(
 ): Promise<SendEmailResult> {
   try {
     const resend = getResendClient();
-    
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@geoadmin.ge';
-    const fromName = process.env.RESEND_FROM_NAME || 'GeoAdmin';
-    
+
+    const { email: fromEmail, name: fromName } = await getDefaultSender();
+
     const { data, error } = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: email,
@@ -42,7 +76,7 @@ export async function sendPasswordResetEmail(
       html: passwordResetTemplate.html(resetUrl),
       text: passwordResetTemplate.text(resetUrl),
     });
-    
+
     if (error) {
       console.error('Resend error (password reset):', error);
       return {
@@ -72,10 +106,9 @@ export async function sendInvitationEmail(
 ): Promise<SendEmailResult> {
   try {
     const resend = getResendClient();
-    
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@geoadmin.ge';
-    const fromName = process.env.RESEND_FROM_NAME || 'GeoAdmin';
-    
+
+    const { email: fromEmail, name: fromName } = await getDefaultSender();
+
     const { data, error } = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: params.email,
@@ -83,7 +116,7 @@ export async function sendInvitationEmail(
       html: invitationTemplate.html(params),
       text: invitationTemplate.text(params),
     });
-    
+
     if (error) {
       console.error('Resend error (invitation):', error);
       return {

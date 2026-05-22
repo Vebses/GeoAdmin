@@ -4,20 +4,20 @@ const BUCKET = 'geoadmin-files';
 const DEFAULT_EXPIRY_SECONDS = 60 * 60; // 1 hour
 
 /**
- * Extract the storage path from either a raw path or a legacy public URL.
- * Legacy records may contain `https://…/storage/v1/object/public/geoadmin-files/<path>`;
- * new records store just `<path>`. Both forms are handled here.
+ * Extract the storage path from any of: a raw path, a legacy public URL, or a
+ * (possibly-expired) signed URL with `?token=...`. Strips both the bucket prefix
+ * and any query string so the result is always a clean storage path that can be
+ * passed to `createSignedUrl(s)`.
  */
 export function extractStoragePath(fileUrlOrPath: string | null | undefined): string | null {
   if (!fileUrlOrPath) return null;
-  // Legacy full URL
   const marker = `/${BUCKET}/`;
   const idx = fileUrlOrPath.indexOf(marker);
-  if (idx !== -1) {
-    return fileUrlOrPath.substring(idx + marker.length);
-  }
-  // Already a path
-  return fileUrlOrPath;
+  let path = idx !== -1 ? fileUrlOrPath.substring(idx + marker.length) : fileUrlOrPath;
+  // Strip any query string (signed URL tokens, cache-busters, etc.)
+  const queryIdx = path.indexOf('?');
+  if (queryIdx !== -1) path = path.substring(0, queryIdx);
+  return path || null;
 }
 
 /**

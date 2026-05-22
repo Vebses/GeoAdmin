@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
-import { getSignedFileUrl } from '@/lib/storage-urls';
+import { getSignedFileUrl, extractStoragePath } from '@/lib/storage-urls';
 
 // Roles that can manage our companies
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -119,12 +119,19 @@ export async function PUT(
         .neq('id', id);
     }
 
+    // Image URLs come back from the form as signed URLs (from the GET endpoint).
+    // Store only the storage path so they can be re-signed on read.
+    const normalized = {
+      ...companyData,
+      logo_url: extractStoragePath(companyData.logo_url),
+      signature_url: extractStoragePath(companyData.signature_url),
+      stamp_url: extractStoragePath(companyData.stamp_url),
+      updated_at: new Date().toISOString(),
+    };
+
     const { data, error } = await (supabase
       .from('our_companies') as any)
-      .update({
-        ...companyData,
-        updated_at: new Date().toISOString(),
-      })
+      .update(normalized)
       .eq('id', id)
       .select()
       .single();

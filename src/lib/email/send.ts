@@ -165,9 +165,10 @@ export async function sendInvoiceEmail({
       throw new Error('No recipient email address');
     }
     
-    // Prepare from address - use verified domain
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@geoadmin.ge';
-    const fromName = process.env.RESEND_FROM_NAME || sender.name;
+    // Prepare from address - the selected our_company's email is the primary source.
+    // Falls back to env / hardcoded only if the company has no email configured.
+    const fromEmail = sender.email || process.env.RESEND_FROM_EMAIL || 'invoices@geoadmin.ge';
+    const fromName = sender.name || process.env.RESEND_FROM_NAME || 'GeoAdmin';
     
     // Prepare attachments
     const attachments = [

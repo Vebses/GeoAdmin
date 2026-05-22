@@ -289,16 +289,24 @@ export async function POST(request: Request) {
       data: completeInvoice,
     }, { status: 201 });
   } catch (error) {
-    console.error('Invoices POST error:', error);
-    // Do NOT leak raw error messages to clients — may expose DB schema or stack info.
-    // Log the detail server-side, return a generic message.
-    console.error('Internal error:', error);
+    // Verbose server-side logging so failures are diagnosable from Vercel logs.
+    const err = error as { message?: string; code?: string; details?: string; hint?: string; stack?: string };
+    console.error('Invoices POST error:', {
+      message: err?.message,
+      code: err?.code,
+      details: err?.details,
+      hint: err?.hint,
+      stack: err?.stack,
+    });
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'SERVER_ERROR',
           message: 'სერვერის შეცდომა',
+          // Surface a short, non-sensitive hint to the client to aid debugging.
+          // Postgres error codes / supabase error codes are safe to expose; raw stack is not.
+          ...(err?.code ? { dbCode: err.code } : {}),
         }
       },
       { status: 500 }

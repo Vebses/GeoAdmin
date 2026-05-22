@@ -112,9 +112,17 @@ export async function POST(request: Request) {
         .neq('id', '00000000-0000-0000-0000-000000000000');
     }
 
+    // Normalize image URLs to storage paths (form may submit signed URLs).
+    const normalized = {
+      ...companyData,
+      logo_url: extractStoragePath(companyData.logo_url),
+      signature_url: extractStoragePath(companyData.signature_url),
+      stamp_url: extractStoragePath(companyData.stamp_url),
+    };
+
     const { data: newCompany, error } = await (supabase
       .from('our_companies') as any)
-      .insert(companyData)
+      .insert(normalized)
       .select()
       .single();
 
