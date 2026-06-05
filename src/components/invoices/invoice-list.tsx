@@ -33,7 +33,6 @@ import {
   useMarkInvoicePaid,
   useDuplicateInvoice
 } from '@/hooks/use-invoices';
-import { useCases } from '@/hooks/use-cases';
 import { usePartners } from '@/hooks/use-partners';
 import { useOurCompanies } from '@/hooks/use-our-companies';
 import { useRealtimeInvoices } from '@/hooks/use-realtime';
@@ -79,11 +78,9 @@ export function InvoiceList() {
     limit: ITEMS_PER_PAGE,
   });
   
-  const { data: casesData } = useCases({ limit: 100 });
   const { data: partnersData } = usePartners({ limit: 100 });
   const { data: ourCompaniesData } = useOurCompanies();
-  
-  const cases = casesData?.data || [];
+
   const partners = partnersData?.data || [];
   const ourCompanies = ourCompaniesData || [];
 
@@ -423,7 +420,6 @@ export function InvoiceList() {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onSave={handleSaveNew}
-        cases={cases}
         partners={partners}
         ourCompanies={ourCompanies}
         loading={createMutation.isPending}

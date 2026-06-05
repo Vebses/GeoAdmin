@@ -251,7 +251,6 @@ export function CaseList() {
       <CaseFilters
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        partners={partners}
         users={users}
         statusCounts={statusCounts}
         currentUserId={currentUser?.id}

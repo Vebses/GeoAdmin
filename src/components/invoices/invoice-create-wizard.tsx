@@ -20,7 +20,6 @@ interface InvoiceCreateWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: InvoiceFormData) => Promise<void>;
-  cases: CaseWithRelations[];
   partners: Partner[];
   ourCompanies: OurCompany[];
   loading?: boolean;
@@ -30,7 +29,6 @@ export function InvoiceCreateWizard({
   isOpen,
   onClose,
   onSave,
-  cases,
   partners,
   ourCompanies,
   loading = false,
@@ -39,6 +37,10 @@ export function InvoiceCreateWizard({
   
   // Step 1 state
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  // Full case object captured from the searchable selector (authoritative source
+  // of the selected case, incl. nested actions — works for ANY case, not just a
+  // prefetched page).
+  const [selectedCaseObj, setSelectedCaseObj] = useState<CaseWithRelations | null>(null);
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
   
@@ -57,9 +59,11 @@ export function InvoiceCreateWizard({
   const [notes, setNotes] = useState('');
 
   // Selected entities
-  const selectedCase = useMemo(() => 
-    cases.find((c) => c.id === selectedCaseId) || null, 
-    [cases, selectedCaseId]
+  // The selected case is whatever the searchable selector handed us (full object
+  // with nested actions/client/insurance), kept in sync with selectedCaseId.
+  const selectedCase = useMemo(
+    () => (selectedCaseObj && selectedCaseObj.id === selectedCaseId ? selectedCaseObj : null),
+    [selectedCaseId, selectedCaseObj]
   );
   const selectedRecipient = useMemo(() => 
     partners.find((p) => p.id === selectedRecipientId) || null, 
@@ -138,6 +142,7 @@ export function InvoiceCreateWizard({
     if (!isOpen) {
       setStep(1);
       setSelectedCaseId(null);
+      setSelectedCaseObj(null);
       setSelectedRecipientId(null);
       setSelectedSenderId(null);
       setInvoiceNumber('');
@@ -154,6 +159,13 @@ export function InvoiceCreateWizard({
       setNotes('');
     }
   }, [isOpen]);
+
+  // Capture the full selected case (with nested actions) from the searchable selector
+  const handleCaseChange = (caseId: string | null, caseObj?: CaseWithRelations | null) => {
+    setSelectedCaseId(caseId);
+    setSelectedCaseObj(caseObj ?? null);
+    setServices([]); // Reset services so they re-populate from the new case
+  };
 
   // Reset services when case or recipient changes
   const handleRecipientChange = (recipientId: string | null) => {
@@ -250,13 +262,13 @@ export function InvoiceCreateWizard({
         <div className="flex-1 overflow-y-auto">
           {step === 1 ? (
             <InvoiceStepCase
-              cases={cases}
+              selectedCase={selectedCase}
               partners={partners}
               ourCompanies={ourCompanies}
               selectedCaseId={selectedCaseId}
               selectedRecipientId={selectedRecipientId}
               selectedSenderId={selectedSenderId}
-              onCaseChange={setSelectedCaseId}
+              onCaseChange={handleCaseChange}
               onRecipientChange={handleRecipientChange}
               onSenderChange={setSelectedSenderId}
             />

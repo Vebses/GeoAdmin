@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Search, Info, AlertTriangle, Building2, Zap } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useMemo } from 'react';
+import { Info, AlertTriangle, Building2, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PartnerCombobox } from '@/components/ui/partner-combobox';
+import { CaseCombobox } from '@/components/ui/case-combobox';
 import { CaseStatusBadge } from '@/components/cases/case-status-badge';
 import type { CaseWithRelations, Partner, OurCompany, CurrencyCode } from '@/types';
 
@@ -15,20 +15,21 @@ const getCurrencySymbol = (currency: CurrencyCode | string): string => {
 };
 
 interface InvoiceStepCaseProps {
-  cases: CaseWithRelations[];
+  /** The full selected case (with nested actions/client/insurance), resolved by the parent wizard */
+  selectedCase: CaseWithRelations | null;
   partners: Partner[];
   ourCompanies: OurCompany[];
   selectedCaseId: string | null;
   selectedRecipientId: string | null;
   selectedSenderId: string | null;
-  onCaseChange: (caseId: string | null) => void;
+  onCaseChange: (caseId: string | null, caseObj?: CaseWithRelations | null) => void;
   onRecipientChange: (recipientId: string | null) => void;
   onSenderChange: (senderId: string | null) => void;
   loading?: boolean;
 }
 
 export function InvoiceStepCase({
-  cases,
+  selectedCase,
   partners,
   ourCompanies,
   selectedCaseId,
@@ -39,22 +40,7 @@ export function InvoiceStepCase({
   onSenderChange,
   loading = false,
 }: InvoiceStepCaseProps) {
-  const [caseSearch, setCaseSearch] = useState('');
-
-  const selectedCase = cases.find((c) => c.id === selectedCaseId);
-  const selectedRecipient = partners.find((p) => p.id === selectedRecipientId);
   const selectedSender = ourCompanies.find((c) => c.id === selectedSenderId);
-
-  // Filter cases by search
-  const filteredCases = cases.filter((c) => {
-    if (!caseSearch) return true;
-    const search = caseSearch.toLowerCase();
-    return (
-      c.case_number.toLowerCase().includes(search) ||
-      c.patient_name.toLowerCase().includes(search) ||
-      c.patient_id?.toLowerCase().includes(search)
-    );
-  });
 
   // Get relevant partners for this case — client, insurance, and all executors
   const caseRelatedPartners = useMemo(() => {
@@ -89,15 +75,14 @@ export function InvoiceStepCase({
   }, [servicesForRecipient]);
 
   // Handle case change — auto-select client (დამკვეთი) as default recipient
-  const handleCaseChange = (caseId: string | null) => {
-    onCaseChange(caseId);
+  const handleCaseChange = (caseId: string | null, caseObj?: CaseWithRelations | null) => {
+    onCaseChange(caseId, caseObj ?? null);
     // Auto-select the case's client as recipient (the one being invoiced)
-    const newCase = cases.find(c => c.id === caseId);
-    if (newCase?.client?.id) {
-      onRecipientChange(newCase.client.id);
-    } else if (newCase?.insurance?.id) {
+    if (caseObj?.client?.id) {
+      onRecipientChange(caseObj.client.id);
+    } else if (caseObj?.insurance?.id) {
       // Fallback to insurance if no client
-      onRecipientChange(newCase.insurance.id);
+      onRecipientChange(caseObj.insurance.id);
     } else {
       onRecipientChange(null);
     }
@@ -124,39 +109,11 @@ export function InvoiceStepCase({
             <label className="text-xs font-medium text-gray-700">
               რომელ ქეისს ეხება ინვოისი? *
             </label>
-            <Select
-              value={selectedCaseId || '__none__'}
-              onValueChange={(value) => handleCaseChange(value === '__none__' ? null : value)}
-            >
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="აირჩიეთ ქეისი..." />
-              </SelectTrigger>
-              <SelectContent>
-                <div className="px-2 py-1.5">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5" />
-                    <Input
-                      placeholder="ძიება..."
-                      value={caseSearch}
-                      onChange={(e) => setCaseSearch(e.target.value)}
-                      className="pl-7 h-8 text-xs"
-                    />
-                  </div>
-                </div>
-                <SelectItem value="__none__" className="text-xs text-gray-400">
-                  -- აირჩიეთ ქეისი --
-                </SelectItem>
-                {filteredCases.map((caseItem) => (
-                  <SelectItem key={caseItem.id} value={caseItem.id} className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-blue-600">{caseItem.case_number}</span>
-                      <span className="text-gray-500">•</span>
-                      <span>{caseItem.patient_name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CaseCombobox
+              value={selectedCaseId}
+              onChange={handleCaseChange}
+              placeholder="აირჩიეთ ქეისი..."
+            />
           </div>
 
           {/* Case Preview */}

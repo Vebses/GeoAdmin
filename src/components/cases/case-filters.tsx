@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PartnerCombobox } from '@/components/ui/partner-combobox';
 import { cn } from '@/lib/utils';
-import type { CaseStatus, Partner, User } from '@/types';
+import type { CaseStatus, User } from '@/types';
 
 export interface CaseFiltersState {
   status: CaseStatus | null;
@@ -24,7 +25,6 @@ export interface CaseFiltersState {
 interface CaseFiltersProps {
   filters: CaseFiltersState;
   onFiltersChange: (filters: CaseFiltersState) => void;
-  partners: Partner[];
   users: User[];
   statusCounts?: Partial<Record<CaseStatus | 'all', number>>;
   /** Pass current user id to enable the "My cases" quick toggle */
@@ -74,7 +74,6 @@ const datePresets: { value: string; label: string; range: () => { from: string; 
 export function CaseFilters({
   filters,
   onFiltersChange,
-  partners,
   users,
   statusCounts = {},
   currentUserId,
@@ -208,23 +207,13 @@ export function CaseFilters({
           </SelectContent>
         </Select>
 
-        {/* Client Filter */}
-        <Select
-          value={filters.client_id || 'all'}
-          onValueChange={(val) => handleClientChange(val === 'all' ? null : val)}
-        >
-          <SelectTrigger className="w-[180px] h-9 text-xs">
-            <SelectValue placeholder="დამკვეთი" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">ყველა დამკვეთი</SelectItem>
-            {partners.map((partner) => (
-              <SelectItem key={partner.id} value={partner.id}>
-                {partner.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Client Filter — server-side search so ALL clients are reachable, not just the first page */}
+        <PartnerCombobox
+          value={filters.client_id}
+          onChange={(id) => handleClientChange(id)}
+          placeholder="დამკვეთი"
+          className="w-[180px] h-9 text-xs"
+        />
 
         {/* Date Range Preset */}
         <Select value={activePreset} onValueChange={handleDatePreset}>
