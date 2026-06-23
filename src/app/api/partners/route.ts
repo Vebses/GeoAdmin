@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
 import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 import type { Partner } from '@/types';
 
 export async function GET(request: Request) {
@@ -91,19 +92,9 @@ export async function POST(request: Request) {
     // Parse and validate request body
     const body = await request.json();
     const validationResult = partnerSchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const partnerData = validationResult.data;
@@ -126,6 +117,10 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Partners POST error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

@@ -4,6 +4,7 @@ import { sendInvitationEmail } from '@/lib/email/auth';
 import { hashToken, generateSecureToken } from '@/lib/token-utils';
 import { getCanonicalOrigin } from '@/lib/safe-redirect';
 import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { describeDbError } from '@/lib/utils/api-errors';
 
 // Role hierarchy for permission checks
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -172,6 +173,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Invite user error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: error instanceof Error ? error.message : 'მოწვევა ვერ მოხერხდა' } },
       { status: 500 }

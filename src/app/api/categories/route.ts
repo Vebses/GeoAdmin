@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { categorySchema } from '@/lib/utils/validation';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 import type { Category, CategoryWithCount } from '@/types';
 
 // Roles that can manage categories
@@ -94,19 +95,9 @@ export async function POST(request: Request) {
     // Parse and validate request body
     const body = await request.json();
     const validationResult = categorySchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const categoryData = validationResult.data;
@@ -138,6 +129,10 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Categories POST error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { caseActionSchema } from '@/lib/utils/validation';
 import { canAccessCase } from '@/lib/case-access';
 import { logCaseActivity } from '@/lib/activity-logs';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 interface RouteParams {
   params: Promise<{ id: string; actionId: string }>;
@@ -55,6 +56,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case action GET error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -106,17 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const validationResult = caseActionSchema.safeParse({ ...body, case_id: caseId });
     
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const actionData = validationResult.data;
@@ -189,6 +184,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case action PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -266,6 +265,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case action DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

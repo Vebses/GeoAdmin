@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { describeDbError } from '@/lib/utils/api-errors';
 
 interface PartnerRow {
   name: string;
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'No data to import' } },
+        { success: false, error: { code: 'NO_ROWS', message: 'იმპორტისთვის მონაცემები ვერ მოიძებნა — ფაილი ცარიელია ან არასწორი ფორმატისაა.' } },
         { status: 400 }
       );
     }
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Enforce row limit
     if (rows.length > MAX_IMPORT_ROWS) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: `მაქსიმუმ ${MAX_IMPORT_ROWS} ჩანაწერის იმპორტი შეიძლება ერთდროულად` } },
+        { success: false, error: { code: 'ROW_LIMIT_EXCEEDED', message: `მაქსიმუმ ${MAX_IMPORT_ROWS} ჩანაწერის იმპორტი შეიძლება ერთდროულად (მოცემულია ${rows.length}). გთხოვთ, დაყავით ფაილი ნაწილებად.` } },
         { status: 400 }
       );
     }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (categoryId && !uuidRegex.test(categoryId)) {
       return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'არასწორი კატეგორიის ID' } },
+        { success: false, error: { code: 'INVALID_CATEGORY_ID', message: 'არასწორი კატეგორიის ID — უნდა იყოს სწორი UUID ფორმატი.' } },
         { status: 400 }
       );
     }
@@ -109,8 +110,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Import partners error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message: 'Import failed' } },
+      { success: false, error: { code: 'SERVER_ERROR', message: 'იმპორტი ვერ მოხერხდა სერვერის შეცდომის გამო.' } },
       { status: 500 }
     );
   }

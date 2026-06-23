@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
 import { getSignedFileUrl, extractStoragePath } from '@/lib/storage-urls';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 // Roles that can manage our companies
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -94,19 +95,9 @@ export async function PUT(
 
     const body = await request.json();
     const validationResult = ourCompanySchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const companyData = validationResult.data;
@@ -141,6 +132,10 @@ export async function PUT(
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Our Company PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -188,6 +183,10 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'კომპანია წაშლილია' });
   } catch (error) {
     console.error('Our Company DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

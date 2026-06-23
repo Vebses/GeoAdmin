@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { invoiceSchema } from '@/lib/utils/validation';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 import { canAccessInvoice } from '@/lib/case-access';
 import { logInvoiceActivity } from '@/lib/activity-logs';
 
@@ -152,19 +153,9 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const validationResult = invoiceSchema.partial().safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const updateData = validationResult.data;
@@ -289,6 +280,10 @@ export async function PUT(request: Request, context: RouteContext) {
     });
   } catch (error) {
     console.error('Invoice PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -355,6 +350,10 @@ export async function DELETE(request: Request, context: RouteContext) {
     });
   } catch (error) {
     console.error('Invoice DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { caseActionSchema } from '@/lib/utils/validation';
 import { canAccessCase } from '@/lib/case-access';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -49,6 +50,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case actions GET error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if case exists
+    // Check if case exists (and is not trashed)
     const { data: caseData, error: caseError } = await supabase
       .from('cases')
       .select('id, actions_count')
@@ -89,8 +94,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (caseError || !caseData) {
+      // Distinguish "in trash" from "truly missing" so the assistant knows what to do.
+      const { data: trashedCase } = await supabase
+        .from('cases')
+        .select('id, deleted_at')
+        .eq('id', caseId)
+        .single();
+
+      if (trashedCase && (trashedCase as { deleted_at: string | null }).deleted_at) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'CASE_IN_TRASH',
+              message: 'ეს ქეისი ნაგვის ყუთშია — სერვისის დასამატებლად ჯერ აღადგინეთ ქეისი',
+            },
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
+        { success: false, error: { code: 'CASE_NOT_FOUND', message: 'ქეისი ვერ მოიძებნა — სერვისის დამატება შეუძლებელია' } },
         { status: 404 }
       );
     }
@@ -100,17 +125,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const validationResult = caseActionSchema.safeParse({ ...body, case_id: caseId });
     
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const actionData = validationResult.data;
@@ -163,6 +178,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 });
   } catch (error) {
     console.error('Case actions POST error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

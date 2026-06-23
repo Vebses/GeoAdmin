@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ourCompanySchema } from '@/lib/utils/validation';
 import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 import type { OurCompany } from '@/types';
 
 // Roles that can manage our companies
@@ -87,19 +88,9 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const validationResult = ourCompanySchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const companyData = validationResult.data;
@@ -134,6 +125,10 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Our Companies POST error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

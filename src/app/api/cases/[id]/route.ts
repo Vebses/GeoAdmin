@@ -5,6 +5,7 @@ import { notifyCaseReassigned, notifyCaseStatusChanged } from '@/lib/notificatio
 import { logCaseActivity } from '@/lib/activity-logs';
 import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
 import { canAccessCase } from '@/lib/case-access';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -212,17 +213,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const validationResult = caseSchema.safeParse(body);
     
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const caseData = validationResult.data;
@@ -390,6 +381,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -476,6 +471,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

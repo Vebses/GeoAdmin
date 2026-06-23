@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 import { logPartnerActivity } from '@/lib/activity-logs';
 
 export async function GET(
@@ -64,19 +65,9 @@ export async function PUT(
 
     const body = await request.json();
     const validationResult = partnerSchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const { data, error } = await (supabase
@@ -109,6 +100,10 @@ export async function PUT(
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Partner PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -158,6 +153,10 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'პარტნიორი წაშლილია' });
   } catch (error) {
     console.error('Partner DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { categorySchema } from '@/lib/utils/validation';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 // Roles that can manage categories
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -39,19 +40,9 @@ export async function PUT(
     // Parse and validate request body
     const body = await request.json();
     const validationResult = categorySchema.safeParse(body);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const categoryData = validationResult.data;
@@ -82,6 +73,10 @@ export async function PUT(
     });
   } catch (error) {
     console.error('Categories PUT error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -169,6 +164,10 @@ export async function DELETE(
     });
   } catch (error) {
     console.error('Categories DELETE error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }

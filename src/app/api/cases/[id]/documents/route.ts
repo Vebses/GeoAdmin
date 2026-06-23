@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
 import { canAccessCase } from '@/lib/case-access';
 import { verifyFileMagicBytes, isUuid } from '@/lib/file-validation';
+import { describeDbError } from '@/lib/utils/api-errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -78,6 +79,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Case documents GET error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'სერვერის შეცდომა' } },
       { status: 500 }
@@ -288,6 +293,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 });
   } catch (error) {
     console.error('Case documents POST error:', error);
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       {
         success: false,
