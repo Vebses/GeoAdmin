@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { invoiceSchema } from '@/lib/utils/validation';
+import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,9 +35,7 @@ export async function GET(request: NextRequest) {
     const created_from = searchParams.get('created_from');
     const created_to = searchParams.get('created_to');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = clampPagination(searchParams.get('page'), searchParams.get('limit'));
 
     // Build query
     let query = supabase
@@ -76,9 +75,10 @@ export async function GET(request: NextRequest) {
       query = query.lte('created_at', created_to);
     }
     if (search) {
-      // Sanitize search input to prevent injection
-      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
-      query = query.or(`invoice_number.ilike.%${sanitizedSearch}%`);
+      const safe = sanitizeSearchTerm(search);
+      if (safe) {
+        query = query.or(`invoice_number.ilike.%${safe}%`);
+      }
     }
 
     // Apply pagination

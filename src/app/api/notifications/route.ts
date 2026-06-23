@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { clampPagination } from '@/lib/utils/query-guards';
 
 export interface Notification {
   id: string;
@@ -18,7 +19,7 @@ export interface Notification {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const { limit } = clampPagination(null, searchParams.get('limit'), { defaultLimit: 20, maxLimit: 100 });
     const unreadOnly = searchParams.get('unread') === 'true';
     
     const supabase = await createClient();
@@ -100,11 +101,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate the type against the allowed enum
+    const VALID_TYPES = ['case_assigned', 'invoice_paid', 'case_completed', 'system'];
+    if (!VALID_TYPES.includes(type)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid notification type' } },
+        { status: 400 }
+      );
+    }
+
+    // Anti-forgery: a non-admin may only create notifications addressed to themselves.
+    // Admins/managers may notify anyone (assignment/system alerts).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: actorProfile } = await (supabase.from('users') as any)
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    const actorRole = (actorProfile as { role?: string } | null)?.role;
+    const actorIsAdmin = actorRole === 'super_admin' || actorRole === 'manager';
+    if (user_id !== user.id && !actorIsAdmin) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'You can only create notifications for yourself' } },
+        { status: 403 }
+      );
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: notification, error } = await (supabase
       .from('notifications') as any)
       .insert({
         user_id,
+        actor_id: user.id, // attribute the sender (also satisfies the RLS actor policy)
         type,
         title,
         message,

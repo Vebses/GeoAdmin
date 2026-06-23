@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { partnerSchema } from '@/lib/utils/validation';
 import { requireAuth, isAuthError, ADMIN_ROLES } from '@/lib/auth-utils';
+import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
 import type { Partner } from '@/types';
 
 export async function GET(request: Request) {
@@ -21,10 +22,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const category_id = searchParams.get('category_id');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const sort = searchParams.get('sort') || 'name';
-    const order = searchParams.get('order') || 'asc';
+    const { page, limit } = clampPagination(searchParams.get('page'), searchParams.get('limit'), { defaultLimit: 20 });
+    const SORTABLE = ['name', 'legal_name', 'created_at', 'city', 'country'];
+    const sortParam = searchParams.get('sort') || 'name';
+    const sort = SORTABLE.includes(sortParam) ? sortParam : 'name';
+    const order = searchParams.get('order') === 'desc' ? 'desc' : 'asc';
 
     // Build query
     let query = supabase
@@ -41,9 +43,10 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      // Sanitize search input to prevent injection
-      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
-      query = query.or(`name.ilike.%${sanitizedSearch}%,legal_name.ilike.%${sanitizedSearch}%,id_code.ilike.%${sanitizedSearch}%`);
+      const safe = sanitizeSearchTerm(search);
+      if (safe) {
+        query = query.or(`name.ilike.%${safe}%,legal_name.ilike.%${safe}%,id_code.ilike.%${safe}%`);
+      }
     }
 
     // Apply sorting

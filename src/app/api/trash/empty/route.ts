@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logActivity } from '@/lib/activity-logs';
+import { extractStoragePath } from '@/lib/storage-urls';
 
 // Roles that can manage trash
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -43,54 +44,78 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get all trashed items
+    // Snapshot the IDs currently in trash so we delete a BOUNDED set (no TOCTOU
+    // where a row trashed mid-operation gets a parent deleted but not its children).
     const [
-      { data: trashedCases },
-      { data: trashedInvoices },
+      { data: trashedCasesRaw },
+      { data: trashedInvoicesRaw },
+      { data: trashedPartnersRaw },
+      { data: trashedCompaniesRaw },
     ] = await Promise.all([
-      supabase
-        .from('cases')
-        .select('id')
-        .not('deleted_at', 'is', null),
-      supabase
-        .from('invoices')
-        .select('id')
-        .not('deleted_at', 'is', null),
+      supabase.from('cases').select('id').not('deleted_at', 'is', null),
+      supabase.from('invoices').select('id').not('deleted_at', 'is', null),
+      supabase.from('partners').select('id').not('deleted_at', 'is', null),
+      supabase.from('our_companies').select('id').not('deleted_at', 'is', null),
     ]);
 
-    // Delete case-related records first (case_actions, case_documents)
-    if (trashedCases && trashedCases.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const caseIds = (trashedCases as any[]).map(c => c.id);
+    const allCaseIds = ((trashedCasesRaw as { id: string }[]) || []).map((c) => c.id);
+    const invoiceIds = ((trashedInvoicesRaw as { id: string }[]) || []).map((i) => i.id);
+    const partnerIds = ((trashedPartnersRaw as { id: string }[]) || []).map((p) => p.id);
+    const companyIds = ((trashedCompaniesRaw as { id: string }[]) || []).map((c) => c.id);
 
-      await Promise.all([
-        supabase.from('case_actions').delete().in('case_id', caseIds),
-        supabase.from('case_documents').delete().in('case_id', caseIds),
-      ]);
+    // Don't purge a case that still has a LIVE (non-deleted) invoice — the case
+    // delete CASCADEs to invoices and would destroy live/paid financial records.
+    let blockedCaseIds: string[] = [];
+    if (allCaseIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: liveInv } = await (supabase.from('invoices') as any)
+        .select('case_id')
+        .is('deleted_at', null)
+        .in('case_id', allCaseIds);
+      blockedCaseIds = Array.from(
+        new Set(((liveInv as { case_id: string }[]) || []).map((r) => r.case_id))
+      );
+    }
+    const caseIds = allCaseIds.filter((cid) => !blockedCaseIds.includes(cid));
+
+    // Remove case document files from Storage before deleting rows (avoid orphaned PII files)
+    if (caseIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: docRows } = await (supabase.from('case_documents') as any)
+        .select('file_url')
+        .in('case_id', caseIds);
+      const docPaths = ((docRows as { file_url: string | null }[]) || [])
+        .map((d) => extractStoragePath(d.file_url))
+        .filter((p): p is string => !!p);
+      if (docPaths.length > 0) {
+        await supabase.storage.from('geoadmin-files').remove(docPaths);
+      }
     }
 
-    // Delete invoice-related records first (invoice_services, invoice_sends)
-    if (trashedInvoices && trashedInvoices.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const invoiceIds = (trashedInvoices as any[]).map(i => i.id);
-
-      await Promise.all([
-        supabase.from('invoice_services').delete().in('invoice_id', invoiceIds),
-        supabase.from('invoice_sends').delete().in('invoice_id', invoiceIds),
-      ]);
+    // Delete bounded to snapshotted IDs, in FK-safe order.
+    if (invoiceIds.length > 0) {
+      await supabase.from('invoice_services').delete().in('invoice_id', invoiceIds);
+      await supabase.from('invoice_sends').delete().in('invoice_id', invoiceIds);
+      await supabase.from('invoices').delete().in('id', invoiceIds);
     }
-
-    // Permanently delete all trashed items in parallel
-    await Promise.all([
-      supabase.from('cases').delete().not('deleted_at', 'is', null),
-      supabase.from('invoices').delete().not('deleted_at', 'is', null),
-      supabase.from('partners').delete().not('deleted_at', 'is', null),
-      supabase.from('our_companies').delete().not('deleted_at', 'is', null),
-    ]);
+    if (caseIds.length > 0) {
+      await supabase.from('case_actions').delete().in('case_id', caseIds);
+      await supabase.from('case_documents').delete().in('case_id', caseIds);
+      await supabase.from('cases').delete().in('id', caseIds);
+    }
+    // partners/our_companies use ON DELETE RESTRICT from invoices — delete one at a
+    // time so a single still-referenced row doesn't abort the rest.
+    for (const pid of partnerIds) {
+      await supabase.from('partners').delete().eq('id', pid);
+    }
+    for (const cid of companyIds) {
+      await supabase.from('our_companies').delete().eq('id', cid);
+    }
 
     const counts = {
-      deleted_cases: trashedCases?.length || 0,
-      deleted_invoices: trashedInvoices?.length || 0,
+      deleted_cases: caseIds.length,
+      deleted_invoices: invoiceIds.length,
+      skipped_cases_with_live_invoices: blockedCaseIds.length,
     };
 
     // Audit the destructive action

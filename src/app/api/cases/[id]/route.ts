@@ -4,6 +4,7 @@ import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseReassigned, notifyCaseStatusChanged } from '@/lib/notifications';
 import { logCaseActivity } from '@/lib/activity-logs';
 import { getSignedFileUrls, extractStoragePath } from '@/lib/storage-urls';
+import { canAccessCase } from '@/lib/case-access';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -38,6 +39,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'არაავტორიზებული' } },
         { status: 401 }
+      );
+    }
+
+    // Least-privilege: only admins/managers, the creator, or the assignee may read
+    // a case + its PHI. 404 (not 403) so we don't leak which case IDs exist.
+    if (!(await canAccessCase(supabase, user.id, id))) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'ქეისი ვერ მოიძებნა' } },
+        { status: 404 }
       );
     }
 

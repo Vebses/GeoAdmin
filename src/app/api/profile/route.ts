@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { stripSensitiveUserFields } from '@/lib/utils/query-guards';
 
 // GET /api/profile - Get current user profile
 export async function GET() {
@@ -30,7 +31,7 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ success: true, data: profile });
+    return NextResponse.json({ success: true, data: stripSensitiveUserFields(profile) });
   } catch (error) {
     console.error('Profile GET error:', error);
     return NextResponse.json(

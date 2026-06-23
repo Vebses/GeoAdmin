@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logActivity } from '@/lib/activity-logs';
+import { extractStoragePath } from '@/lib/storage-urls';
 
 // Roles that can permanently delete
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -83,8 +84,42 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // For cases, also delete related records
+    // For cases: refuse if any LIVE (non-deleted) invoice still references it.
+    // invoices.case_id is ON DELETE CASCADE, so purging the case would silently
+    // wipe live/paid invoices and bypass their own retention.
     if (entityType === 'case') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: liveInvoices } = await (supabase.from('invoices') as any)
+        .select('id')
+        .eq('case_id', id)
+        .is('deleted_at', null)
+        .limit(1);
+      if (liveInvoices && liveInvoices.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'HAS_ACTIVE_INVOICES',
+              message: 'ქეისის სამუდამოდ წაშლა ვერ მოხერხდა: მას აქვს აქტიური ინვოისები. ჯერ წაშალეთ ან გადაიტანეთ ისინი.',
+            },
+          },
+          { status: 409 }
+        );
+      }
+
+      // Remove the case's document files from Storage before deleting their rows,
+      // otherwise patient files orphan in the bucket forever.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: docRows } = await (supabase.from('case_documents') as any)
+        .select('file_url')
+        .eq('case_id', id);
+      const docPaths = ((docRows as { file_url: string | null }[]) || [])
+        .map((d) => extractStoragePath(d.file_url))
+        .filter((p): p is string => !!p);
+      if (docPaths.length > 0) {
+        await supabase.storage.from('geoadmin-files').remove(docPaths);
+      }
+
       await supabase.from('case_actions').delete().eq('case_id', id);
       await supabase.from('case_documents').delete().eq('case_id', id);
     }

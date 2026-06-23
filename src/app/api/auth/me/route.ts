@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { stripSensitiveUserFields } from '@/lib/utils/query-guards';
 import type { User } from '@/types';
 
 export async function GET() {
@@ -33,7 +34,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      user: userProfile,
+      user: stripSensitiveUserFields(userProfile),
     });
   } catch (error) {
     console.error('Get user error:', error);

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { hashToken, timingSafeEqualHex, randomResponseDelay } from '@/lib/token-utils';
 import { revokeAllUserSessions } from '@/lib/sessions';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 // Create admin client for password update
 function getAdminClient() {
@@ -23,6 +24,16 @@ function getAdminClient() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Throttle token-redemption attempts (volume abuse / DB-lookup cost)
+    const ip = getClientIp(request);
+    const rl = await checkRateLimitAsync(`reset-redeem:${ip}`, { limit: 10, windowSec: 900 });
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: 'ძალიან ბევრი მცდელობა. სცადეთ მოგვიანებით.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { token, password } = body;
 
@@ -66,32 +77,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update password using admin client
+    // Update password using admin client. public.users.id IS the auth user id
+    // (users.id REFERENCES auth.users(id)), so update directly — the old
+    // listUsers() scan silently failed for any user beyond the first ~50 page.
     const adminClient = getAdminClient();
-    
-    // First, find the auth user by email
-    const { data: authUsers, error: listError } = await adminClient.auth.admin.listUsers();
-    
-    if (listError) {
-      console.error('List users error:', listError);
-      return NextResponse.json(
-        { error: 'პაროლის შეცვლა ვერ მოხერხდა' },
-        { status: 500 }
-      );
-    }
 
-    const authUser = authUsers.users.find(u => u.email === user.email);
-    
-    if (!authUser) {
-      return NextResponse.json(
-        { error: 'მომხმარებელი ვერ მოიძებნა' },
-        { status: 404 }
-      );
-    }
-
-    // Update the password
     const { error: updateError } = await adminClient.auth.admin.updateUserById(
-      authUser.id,
+      user.id,
       { password }
     );
 

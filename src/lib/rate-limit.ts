@@ -120,9 +120,12 @@ export async function checkRateLimitAsync(
  * Extract client IP from request headers (works behind proxies).
  */
 export function getClientIp(request: Request): string {
+  // Prefer x-real-ip: on Vercel this is the platform-set connecting IP and is NOT
+  // client-spoofable. The leftmost x-forwarded-for entry is client-controlled, so an
+  // attacker could mint unlimited rate-limit buckets by rotating it.
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  return request.headers.get('x-real-ip') || 'unknown';
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return 'unknown';
 }

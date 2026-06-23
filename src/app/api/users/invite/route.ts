@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { sendInvitationEmail } from '@/lib/email/auth';
 import { hashToken, generateSecureToken } from '@/lib/token-utils';
 import { getCanonicalOrigin } from '@/lib/safe-redirect';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 // Role hierarchy for permission checks
 const ADMIN_ROLES = ['super_admin', 'manager'];
@@ -55,6 +56,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'მხოლოდ ადმინისტრატორებს შეუძლიათ მომხმარებლების მოწვევა' } },
         { status: 403 }
+      );
+    }
+
+    // Throttle invitation creation to prevent invite/email flooding
+    const ip = getClientIp(request);
+    const rl = await checkRateLimitAsync(`invite-create:${ip}`, { limit: 20, windowSec: 3600 });
+    if (!rl.success) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RATE_LIMITED', message: 'ძალიან ბევრი მოწვევა. სცადეთ მოგვიანებით.' } },
+        { status: 429 }
       );
     }
 

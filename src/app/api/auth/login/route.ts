@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { createSession, extractSessionInfo } from '@/lib/sessions';
+import { stripSensitiveUserFields } from '@/lib/utils/query-guards';
 import type { User } from '@/types';
 
 export async function POST(request: NextRequest) {
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      user: userProfile,
+      user: stripSensitiveUserFields(userProfile),
     });
   } catch (error) {
     console.error('Login error:', error);

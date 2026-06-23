@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseAssigned } from '@/lib/notifications';
 import { logCaseActivity } from '@/lib/activity-logs';
+import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,9 +34,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const opened_from = searchParams.get('opened_from'); // YYYY-MM-DD inclusive
     const opened_to = searchParams.get('opened_to');     // YYYY-MM-DD inclusive
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = clampPagination(searchParams.get('page'), searchParams.get('limit'));
     const my_cases = searchParams.get('my_cases') === 'true';
 
     // Build query
@@ -69,8 +68,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
     
-    // For my_cases filter or if assistant filtering their own
-    if (my_cases || (assigned_to && assigned_to === user.id)) {
+    // Least-privilege: non-admins (assistants, accountants) only see cases they
+    // created or are assigned to. Managers/super_admins see all.
+    const role = (currentUserProfile as { role?: string } | null)?.role;
+    const isPrivileged = role === 'super_admin' || role === 'manager';
+    if (!isPrivileged) {
+      query = query.or(`created_by.eq.${user.id},assigned_to.eq.${user.id}`);
+    } else if (my_cases || (assigned_to && assigned_to === user.id)) {
       query = query.eq('assigned_to', user.id);
     } else if (assigned_to) {
       query = query.eq('assigned_to', assigned_to);
@@ -83,9 +87,10 @@ export async function GET(request: NextRequest) {
       query = query.eq('insurance_id', insurance_id);
     }
     if (search) {
-      // Sanitize search input to prevent injection
-      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
-      query = query.or(`case_number.ilike.%${sanitizedSearch}%,patient_name.ilike.%${sanitizedSearch}%,patient_id.ilike.%${sanitizedSearch}%`);
+      const safe = sanitizeSearchTerm(search);
+      if (safe) {
+        query = query.or(`case_number.ilike.%${safe}%,patient_name.ilike.%${safe}%,patient_id.ilike.%${safe}%`);
+      }
     }
 
     // Date range filter on opened_at — accepts YYYY-MM-DD strings
@@ -277,7 +282,8 @@ export async function POST(request: Request) {
       (newCase as any).id,
       caseNumber,
       {
-        patient_name: caseData.patient_name,
+        // patient_name intentionally omitted — entity_name already carries the
+        // case number; keep direct PII out of the long-lived activity_logs.
         assigned_to: assignedTo,
       }
     );
