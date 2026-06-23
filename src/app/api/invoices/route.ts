@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { invoiceSchema } from '@/lib/utils/validation';
 import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -118,11 +119,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check role - assistants cannot access invoices
+    // Check role - assistants cannot create invoices
     const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
     if ((profile as { role: string } | null)?.role === 'assistant') {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'წვდომა აკრძალულია' } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'ასისტენტებს არ აქვთ ინვოისის შექმნის უფლება — მიმართეთ მენეჯერს.' } },
         { status: 403 }
       );
     }
@@ -145,20 +146,74 @@ export async function POST(request: Request) {
     
     if (!validationResult.success) {
       console.error('Invoice validation error:', validationResult.error.flatten());
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const invoiceData = validationResult.data;
+
+    // ── Pre-flight checks: surface the EXACT reason creation can't proceed ──
+    // (Each returns a specific labeled code/message so the assistant knows why.)
+
+    // 1. The case must exist and not be in the trash.
+    const { data: caseRow } = await supabase
+      .from('cases')
+      .select('id, case_number, deleted_at')
+      .eq('id', invoiceData.case_id)
+      .maybeSingle();
+    if (!caseRow) {
+      return NextResponse.json(
+        { success: false, error: { code: 'CASE_NOT_FOUND', message: 'მითითებული ქეისი ვერ მოიძებნა.' } },
+        { status: 404 }
+      );
+    }
+    if ((caseRow as { deleted_at: string | null }).deleted_at) {
+      return NextResponse.json(
+        { success: false, error: { code: 'CASE_IN_TRASH', message: 'ეს ქეისი ნაგვის ყუთშია — ჯერ აღადგინეთ ქეისი, შემდეგ შექმენით ინვოისი.' } },
+        { status: 409 }
+      );
+    }
+
+    // 2. The recipient (partner) must exist and not be in the trash.
+    const { data: recipientRow } = await supabase
+      .from('partners')
+      .select('id, name, deleted_at')
+      .eq('id', invoiceData.recipient_id)
+      .maybeSingle();
+    if (!recipientRow) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RECIPIENT_NOT_FOUND', message: 'მიმღები კომპანია (პარტნიორი) ვერ მოიძებნა.' } },
+        { status: 404 }
+      );
+    }
+    if ((recipientRow as { deleted_at: string | null }).deleted_at) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RECIPIENT_IN_TRASH', message: 'მიმღები კომპანია ნაგვის ყუთშია — აღადგინეთ პარტნიორი ან აირჩიეთ სხვა.' } },
+        { status: 409 }
+      );
+    }
+
+    // 3. The sender (our company) must exist and not be in the trash.
+    const { data: senderRow } = await supabase
+      .from('our_companies')
+      .select('id, name, deleted_at')
+      .eq('id', invoiceData.sender_id)
+      .maybeSingle();
+    if (!senderRow) {
+      return NextResponse.json(
+        { success: false, error: { code: 'SENDER_NOT_FOUND', message: 'გამგზავნი კომპანია ვერ მოიძებნა.' } },
+        { status: 404 }
+      );
+    }
+    if ((senderRow as { deleted_at: string | null }).deleted_at) {
+      return NextResponse.json(
+        { success: false, error: { code: 'SENDER_IN_TRASH', message: 'გამგზავნი კომპანია ნაგვის ყუთშია — აღადგინეთ ან აირჩიეთ სხვა.' } },
+        { status: 409 }
+      );
+    }
+
+    // NOTE: multiple invoices per case+recipient are allowed (corrections / partial
+    // billing). The wizard shows a non-blocking warning listing existing invoices for
+    // the case so the assistant doesn't create a duplicate by accident.
 
     // Use provided invoice number or generate one atomically
     let invoiceNumber = invoiceData.invoice_number?.trim();
@@ -170,7 +225,10 @@ export async function POST(request: Request) {
 
       if (invoiceNumberError) {
         console.error('Failed to generate invoice number:', invoiceNumberError);
-        throw new Error('Failed to generate invoice number');
+        return NextResponse.json(
+          { success: false, error: { code: 'INVOICE_NUMBER_FAILED', message: 'ინვოისის ნომრის ავტომატური გენერაცია ვერ მოხერხდა. სცადეთ თავიდან ან მიუთითეთ ნომერი ხელით.' } },
+          { status: 500 }
+        );
       }
 
       invoiceNumber = invoiceNumberData as string;
@@ -242,7 +300,22 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    if (invoiceError) throw invoiceError;
+    if (invoiceError) {
+      const mapped = describeDbError(invoiceError);
+      if (mapped) {
+        const isDup = (invoiceError as { code?: string }).code === '23505';
+        return NextResponse.json(
+          {
+            success: false,
+            error: isDup
+              ? { code: 'DUPLICATE_INVOICE_NUMBER', message: 'ინვოისის ნომერი ამ წამს დაიკავა სხვა ინვოისმა — სცადეთ თავიდან.' }
+              : mapped,
+          },
+          { status: 409 }
+        );
+      }
+      throw invoiceError;
+    }
 
     const invoiceId = (newInvoice as { id: string }).id;
 
@@ -262,7 +335,15 @@ export async function POST(request: Request) {
         .from('invoice_services')
         .insert(servicesInsertData as never);
 
-      if (servicesError) throw servicesError;
+      if (servicesError) {
+        // Roll back the just-created invoice so we never leave a zero-service invoice.
+        await supabase.from('invoices').delete().eq('id', invoiceId);
+        console.error('Invoice services insert failed; rolled back invoice:', servicesError);
+        return NextResponse.json(
+          { success: false, error: { code: 'SERVICES_SAVE_FAILED', message: 'ინვოისის სერვისების შენახვა ვერ მოხერხდა — ინვოისი არ შეიქმნა. სცადეთ თავიდან.' } },
+          { status: 500 }
+        );
+      }
     }
 
     // Fetch complete invoice with relations
@@ -302,6 +383,11 @@ export async function POST(request: Request) {
       hint: err?.hint,
       stack: err?.stack,
     });
+    // Map known DB constraint failures to a specific labeled message first.
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       {
         success: false,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Info, AlertTriangle, Building2, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PartnerCombobox } from '@/components/ui/partner-combobox';
@@ -12,6 +12,13 @@ import type { CaseWithRelations, Partner, OurCompany, CurrencyCode } from '@/typ
 const getCurrencySymbol = (currency: CurrencyCode | string): string => {
   const symbols: Record<string, string> = { GEL: '₾', EUR: '€', USD: '$' };
   return symbols[currency] || '€';
+};
+
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: 'დრაფტი',
+  unpaid: 'გადასახდელი',
+  paid: 'გადახდილი',
+  cancelled: 'გაუქმებული',
 };
 
 interface InvoiceStepCaseProps {
@@ -41,6 +48,31 @@ export function InvoiceStepCase({
   loading = false,
 }: InvoiceStepCaseProps) {
   const selectedSender = ourCompanies.find((c) => c.id === selectedSenderId);
+
+  // Non-blocking warning: surface invoices that ALREADY exist on this case so the
+  // assistant doesn't create a duplicate by accident. Multiple invoices per case are allowed.
+  const [existingInvoices, setExistingInvoices] = useState<
+    Array<{ id: string; invoice_number: string; status: string; recipient?: { name: string } | null }>
+  >([]);
+
+  useEffect(() => {
+    if (!selectedCaseId) {
+      setExistingInvoices([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/invoices?case_id=${selectedCaseId}&limit=50`)
+      .then((r) => r.json())
+      .then((result) => {
+        if (!cancelled && result.success) setExistingInvoices(result.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setExistingInvoices([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCaseId]);
 
   // Get relevant partners for this case — client, insurance, and all executors
   const caseRelatedPartners = useMemo(() => {
@@ -145,6 +177,27 @@ export function InvoiceStepCase({
                   <p className="text-gray-700">{selectedCase.actions?.length || 0}</p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Non-blocking duplicate warning — an invoice already exists for this case */}
+          {selectedCaseId && existingInvoices.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1.5">
+              <div className="flex items-start gap-1.5 font-medium">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  ამ ქეისზე უკვე არსებობს {existingInvoices.length} ინვოისი — გადაამოწმეთ, რომ არ ქმნით დუბლიკატს.
+                </span>
+              </div>
+              <ul className="space-y-0.5 pl-6 list-disc">
+                {existingInvoices.map((inv) => (
+                  <li key={inv.id}>
+                    <span className="font-medium">{inv.invoice_number}</span>
+                    {inv.recipient?.name ? ` — ${inv.recipient.name}` : ''}{' '}
+                    <span className="text-amber-600">({INVOICE_STATUS_LABELS[inv.status] || inv.status})</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

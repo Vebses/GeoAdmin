@@ -4,6 +4,7 @@ import { caseSchema } from '@/lib/utils/validation';
 import { notifyCaseAssigned } from '@/lib/notifications';
 import { logCaseActivity } from '@/lib/activity-logs';
 import { sanitizeSearchTerm, clampPagination } from '@/lib/utils/query-guards';
+import { zodErrorResponse, describeDbError } from '@/lib/utils/api-errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -157,17 +158,7 @@ export async function POST(request: Request) {
     console.log('Cases POST - validation result:', validationResult.success ? 'valid' : validationResult.error?.flatten());
 
     if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: { 
-            code: 'VALIDATION_ERROR', 
-            message: 'ვალიდაციის შეცდომა',
-            details: validationResult.error.flatten().fieldErrors 
-          } 
-        },
-        { status: 400 }
-      );
+      return zodErrorResponse(validationResult.error);
     }
 
     const caseData = validationResult.data;
@@ -194,30 +185,36 @@ export async function POST(request: Request) {
 
       if (caseNumberError) {
         console.error('Failed to generate case number:', caseNumberError);
-        throw new Error('Failed to generate case number');
+        return NextResponse.json(
+          { success: false, error: { code: 'CASE_NUMBER_FAILED', message: 'ქეისის ნომრის ავტომატური გენერაცია ვერ მოხერხდა. სცადეთ თავიდან ან მიუთითეთ ნომერი ხელით.' } },
+          { status: 500 }
+        );
       }
 
       caseNumber = caseNumberData as string;
     } else {
-      // Check if provided case number already exists
+      // Check if the number is already taken — INCLUDING soft-deleted rows, since
+      // the UNIQUE index spans them and the INSERT would otherwise fail generically.
       const { data: existingCase } = await supabase
         .from('cases')
-        .select('id')
+        .select('id, deleted_at')
         .eq('case_number', caseNumber)
-        .is('deleted_at', null)
-        .single();
+        .maybeSingle();
 
       if (existingCase) {
+        const inTrash = !!(existingCase as { deleted_at: string | null }).deleted_at;
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'DUPLICATE_CASE_NUMBER',
-              message: 'ქეისის ნომერი უკვე გამოყენებულია',
-              details: { case_number: ['ეს ქეისის ნომერი უკვე არსებობს'] }
+              message: inTrash
+                ? 'ეს ქეისის ნომერი დაკავებულია ნაგვის ყუთში არსებული ქეისით — აღადგინეთ ის ან მიუთითეთ სხვა ნომერი.'
+                : 'ქეისის ნომერი უკვე გამოყენებულია.',
+              details: { case_number: [inTrash ? 'ნომერი ეკუთვნის ნაგვის ყუთში არსებულ ქეისს' : 'ეს ქეისის ნომერი უკვე არსებობს'] }
             }
           },
-          { status: 400 }
+          { status: 409 }
         );
       }
     }
@@ -272,7 +269,23 @@ export async function POST(request: Request) {
       `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const mapped = describeDbError(error);
+      if (mapped) {
+        // e.g. duplicate case_number race, or a bad client/insurance/assignee reference.
+        const isDup = (error as { code?: string }).code === '23505';
+        return NextResponse.json(
+          {
+            success: false,
+            error: isDup
+              ? { code: 'DUPLICATE_CASE_NUMBER', message: 'ქეისის ნომერი ამ წამს დაიკავა სხვა ქეისმა — სცადეთ თავიდან.' }
+              : mapped,
+          },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     // Log activity
     await logCaseActivity(
@@ -309,6 +322,10 @@ export async function POST(request: Request) {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
+    const mapped = describeDbError(error);
+    if (mapped) {
+      return NextResponse.json({ success: false, error: mapped }, { status: 409 });
+    }
     return NextResponse.json(
       {
         success: false,
