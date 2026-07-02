@@ -43,11 +43,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         *,
         sender:our_companies(*),
         recipient:partners(*),
-        case:cases(*),
+        case:cases(*, assigned_user:users!cases_assigned_to_fkey(id, full_name)),
+        creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*)
       `)
       .eq('id', id)
       .is('deleted_at', null)
+      .order('sort_order', { referencedTable: 'services', ascending: true })
       .single();
 
     if (invoiceError || !invoice) {
@@ -62,6 +64,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       recipient: Partner;
       case: CaseWithRelations;
     };
+
+    // RLS hides soft-deleted partners/companies from non-managers, so the
+    // embeds can come back null even though the invoice row loads. Fail with
+    // a clear message instead of crashing the render.
+    if (!typedInvoice.sender || !typedInvoice.recipient || !typedInvoice.case) {
+      throw new Error('ინვოისის კომპანია, პარტნიორი ან ქეისი წაშლილია ან მიუწვდომელია');
+    }
 
     // Note: PDF caching via pdf_url is not currently implemented.
     // PDFs are generated on-demand for freshness. To enable caching,

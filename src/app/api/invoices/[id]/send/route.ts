@@ -56,12 +56,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         *,
         sender:our_companies(*),
         recipient:partners(*),
-        case:cases(*),
+        case:cases(*, assigned_user:users!cases_assigned_to_fkey(id, full_name)),
+        creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*),
         sends:invoice_sends(*)
       `)
       .eq('id', id)
       .is('deleted_at', null)
+      .order('sort_order', { referencedTable: 'services', ascending: true })
       .single();
 
     if (invoiceError || !invoice) {
@@ -77,6 +79,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       case: CaseWithRelations;
       sends: Array<{ id: string }>;
     };
+
+    // RLS hides soft-deleted partners/companies from non-managers, so the
+    // embeds can come back null even though the invoice row loads
+    if (!typedInvoice.sender || !typedInvoice.recipient || !typedInvoice.case) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RELATION_MISSING', message: 'ინვოისის კომპანია, პარტნიორი ან ქეისი წაშლილია ან მიუწვდომელია' } },
+        { status: 409 }
+      );
+    }
+
+    // Don't email an invoice whose BANK DETAILS box would be empty — the
+    // sender company must have an account in the invoice currency
+    const bankAccountForCurrency =
+      typedInvoice.currency === 'GEL' ? typedInvoice.sender.account_gel :
+      typedInvoice.currency === 'USD' ? typedInvoice.sender.account_usd :
+      typedInvoice.sender.account_eur;
+    if (!bankAccountForCurrency) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NO_BANK_ACCOUNT', message: `გამგზავნ კომპანიას არ აქვს საბანკო ანგარიში ვალუტაში ${typedInvoice.currency} — შეავსეთ კომპანიის რეკვიზიტები` } },
+        { status: 400 }
+      );
+    }
 
     // Validate invoice status - cannot send paid or cancelled invoices
     if (typedInvoice.status === 'paid') {

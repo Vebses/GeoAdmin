@@ -37,8 +37,12 @@ export function registerFonts() {
       ],
     });
 
-    // Configure hyphenation callback to prevent breaks in Georgian text
-    Font.registerHyphenationCallback((word) => [word]);
+    // Configure hyphenation callback to prevent breaks in Georgian text.
+    // Pathological unbroken tokens (>25 chars, e.g. pasted codes/URLs) are
+    // force-chunked so they wrap instead of overflowing their column.
+    Font.registerHyphenationCallback((word) =>
+      word.length <= 25 ? [word] : word.match(/.{1,12}/g) ?? [word]
+    );
 
     fontsRegistered = true;
     console.log('FiraGO fonts registered successfully');

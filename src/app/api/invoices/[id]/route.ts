@@ -217,11 +217,15 @@ export async function PUT(request: Request, context: RouteContext) {
 
     // Update services if provided
     if (services && services.length > 0) {
-      // Delete existing services
-      await supabase
+      // Delete existing services. This must not fail silently: on invoices
+      // with franchise > 0 the recompute trigger can hit the total >= 0
+      // CHECK and abort the delete — proceeding would duplicate every row.
+      const { error: deleteServicesError } = await supabase
         .from('invoice_services')
         .delete()
         .eq('invoice_id', id);
+
+      if (deleteServicesError) throw deleteServicesError;
 
       // Insert new services (map to correct DB column names)
       const servicesInsertData = services.map((service: { description: string; quantity?: number; unit_price: number; total: number }, index: number) => ({
