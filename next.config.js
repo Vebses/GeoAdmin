@@ -12,7 +12,9 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https://*.supabase.co https://cdn.jsdelivr.net",
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com",
-  "frame-src 'none'",
+  // 'self' = hidden print iframe (/api/invoices/[id]/pdf); blob: = invoice PDF
+  // preview modal; supabase.co = case-document previews via signed storage URLs
+  "frame-src 'self' blob: https://*.supabase.co",
   "frame-ancestors 'self'",
   "object-src 'none'",
   "base-uri 'self'",

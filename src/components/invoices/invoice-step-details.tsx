@@ -347,142 +347,183 @@ export function InvoiceStepDetails({
             </div>
           </div>
           
-          {/* PDF Content */}
+          {/* PDF Content — miniature of the branded Geoassistance PDF template */}
           <div className="p-4">
-            <div className="max-w-sm mx-auto space-y-4 text-xs">
-              {/* Header with Logo */}
-              <div className="flex justify-between items-start">
+            <div className="max-w-sm mx-auto text-xs">
+              {/* Red top rule */}
+              <div className="h-1 bg-[#E8332C] mb-2.5" />
+
+              {/* Header: logo / address+phone / bilingual title */}
+              <div className="flex items-center justify-between gap-2">
+                {selectedSender?.logo_url ? (
+                  <img
+                    src={selectedSender.logo_url}
+                    alt="Logo"
+                    className="w-16 h-8 object-contain shrink-0"
+                  />
+                ) : (
+                  <span className="text-[11px] font-bold text-[#E8332C] shrink-0">
+                    {selectedSender?.name || 'LOGO'}
+                  </span>
+                )}
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <p className="text-[7px] leading-tight text-[#1E5C82] truncate">
+                    📍 {[selectedSender?.address, selectedSender?.city, countryDisplayName(selectedSender?.country) || 'საქართველო'].filter(Boolean).join(', ')}
+                  </p>
+                  {selectedSender?.phone && (
+                    <p className="text-[7px] text-[#1E5C82] truncate">✆ {selectedSender.phone}</p>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] font-bold text-[#E8332C] leading-tight">ანგარიშ-ფაქტურა</p>
+                  <p className="text-[8px] font-medium text-[#1E5C82] tracking-[0.2em]">INVOICE</p>
+                </div>
+              </div>
+
+              {/* Blue rule */}
+              <div className="h-0.5 bg-[#1E5C82] mt-2 mb-3" />
+
+              {/* BILL TO + INVOICE DETAILS panels */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  {selectedSender?.logo_url ? (
-                    <div className="w-20 h-10 flex items-center justify-start">
-                      <img 
-                        src={selectedSender.logo_url} 
-                        alt="Logo" 
-                        className="max-w-full max-h-full object-contain"
-                      />
+                  <div className="bg-[#1E5C82] px-2 py-1">
+                    <p className="text-[8px] font-bold text-white">BILL TO</p>
+                  </div>
+                  <div className="bg-[#DCE9F5] px-2 py-2 space-y-1.5 min-h-[88px]">
+                    <div>
+                      <p className="text-[7px] font-bold text-[#1E5C82]">Company / Insurance:</p>
+                      <p className="text-[8px] font-semibold text-gray-900 truncate">{selectedRecipient?.legal_name || selectedRecipient?.name || '—'}</p>
                     </div>
+                    <div>
+                      <p className="text-[7px] font-bold text-[#1E5C82]">Patient:</p>
+                      <p className="text-[8px] font-semibold text-gray-900 truncate">{selectedCase?.patient_name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-bold text-[#1E5C82]">Case Reference:</p>
+                      <p className="text-[8px] font-semibold text-gray-900">{selectedCase?.case_number || '—'}</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="bg-[#E8332C] px-2 py-1">
+                    <p className="text-[8px] font-bold text-white">INVOICE DETAILS</p>
+                  </div>
+                  <div className="bg-[#DCE9F5] px-2 py-2 space-y-1.5 min-h-[88px]">
+                    <div className="flex justify-between gap-1">
+                      <span className="text-[7px] font-bold text-[#1E5C82]">Invoice #</span>
+                      <span className="text-[8px] text-gray-900 truncate">{invoiceNumber || 'ავტო'}</span>
+                    </div>
+                    <div className="flex justify-between gap-1">
+                      <span className="text-[7px] font-bold text-[#1E5C82]">Date</span>
+                      <span className="text-[8px] text-gray-900">{formatDate(new Date())}</span>
+                    </div>
+                    <div className="flex justify-between gap-1">
+                      <span className="text-[7px] font-bold text-[#1E5C82]">Due Date</span>
+                      <span className="text-[8px] text-gray-900"></span>
+                    </div>
+                    <div className="flex justify-between gap-1">
+                      <span className="text-[7px] font-bold text-[#1E5C82]">Com/ID</span>
+                      <span className="text-[8px] text-gray-900">{selectedSender?.id_code || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Services table */}
+              <div className="mt-3">
+                <div className="flex gap-px">
+                  <div className="bg-[#1E5C82] px-2 py-1 flex-1">
+                    <p className="text-[7px] font-bold text-white">DESCRIPTION</p>
+                  </div>
+                  <div className="bg-[#1E5C82] px-1 py-1 w-8 text-center">
+                    <p className="text-[7px] font-bold text-white">QTY</p>
+                  </div>
+                  <div className="bg-[#1E5C82] px-1 py-1 w-12 text-center">
+                    <p className="text-[7px] font-bold text-white">UNIT</p>
+                  </div>
+                  <div className="bg-[#E8332C] px-1 py-1 w-14 text-center">
+                    <p className="text-[7px] font-bold text-white">AMOUNT</p>
+                  </div>
+                </div>
+                {services.slice(0, 4).map((s, i) => (
+                  <div key={i} className={`flex gap-px py-1 ${i % 2 === 0 ? 'bg-[#DCE9F5]' : 'bg-white'}`}>
+                    <p className="px-2 flex-1 text-[8px] text-gray-800 truncate">{s.description || '—'}</p>
+                    <p className="px-1 w-8 text-center text-[8px] text-gray-800">{s.quantity || 1}</p>
+                    <p className="px-1 w-12 text-right text-[8px] text-gray-800">{(s.unit_price || 0).toFixed(2)}</p>
+                    <p className="px-1 w-14 text-right text-[8px] text-gray-800">{(s.total || 0).toFixed(2)}</p>
+                  </div>
+                ))}
+                {services.length > 4 && (
+                  <p className={`py-1 text-center text-[7px] text-gray-500 ${services.length % 2 === 0 ? 'bg-white' : 'bg-[#DCE9F5]'}`}>
+                    + {services.length - 4} მეტი სერვისი...
+                  </p>
+                )}
+                {franchiseAmount > 0 && (
+                  <div className="flex gap-px py-1">
+                    <p className="px-2 flex-1 text-[8px] font-semibold text-[#E8332C]">Franchise</p>
+                    <p className="px-1 w-14 text-right text-[8px] font-semibold text-[#E8332C] ml-auto">-{franchiseAmount.toFixed(2)}</p>
+                  </div>
+                )}
+                {/* Empty striped filler rows */}
+                {Array.from({ length: Math.max(0, 4 - services.length - (franchiseAmount > 0 ? 1 : 0)) }).map((_, i) => {
+                  const rowIndex = services.length + (franchiseAmount > 0 ? 1 : 0) + i;
+                  return <div key={`e-${i}`} className={`h-4 ${rowIndex % 2 === 0 ? 'bg-[#DCE9F5]' : 'bg-white'}`} />;
+                })}
+              </div>
+
+              {/* Manager + totals */}
+              <div className="flex justify-between items-start mt-2.5">
+                <p className="text-[7px] font-bold text-[#1E5C82] pt-1">
+                  Manager: <span className="font-normal text-gray-700 border-b border-gray-400 inline-block min-w-[60px]">{selectedCase?.assigned_user?.full_name || ''}</span>
+                </p>
+                <div className="w-32">
+                  <div className="flex justify-between px-1 mb-1">
+                    <span className="text-[8px] font-semibold text-gray-800">Subtotal</span>
+                    <span className="text-[8px] font-semibold text-gray-800">{subtotal.toFixed(2)}</span>
+                  </div>
+                  {franchiseAmount > 0 && (
+                    <div className="flex justify-between px-1 mb-1">
+                      <span className="text-[8px] font-semibold text-[#E8332C]">Franchise</span>
+                      <span className="text-[8px] font-semibold text-[#E8332C]">-{franchiseAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex">
+                    <div className="bg-[#1E5C82] py-1 w-[45%] text-center">
+                      <span className="text-[8px] font-bold text-white">TOTAL</span>
+                    </div>
+                    <div className="bg-[#E8332C] py-1 px-1.5 w-[55%] text-right">
+                      <span className="text-[8px] font-bold text-white">{total.toFixed(2)} {currencySymbol}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signature / stamp / bank details */}
+              <div className="flex justify-between items-end mt-3 gap-2">
+                <div className="w-20 shrink-0">
+                  <p className="text-[6.5px] font-semibold text-gray-800 mb-0.5">ხელმოწერა / Signature</p>
+                  <div className="h-6 border-b border-gray-800 flex items-end justify-center">
+                    {selectedSender?.signature_url && (
+                      <img src={selectedSender.signature_url} alt="Signature" className="max-h-6 object-contain" />
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0 text-center">
+                  <p className="text-[6.5px] font-semibold text-gray-800 mb-0.5">ბეჭედი / Stamp</p>
+                  {selectedSender?.stamp_url ? (
+                    <img src={selectedSender.stamp_url} alt="Stamp" className="w-9 h-9 object-contain mx-auto" />
                   ) : (
-                    <div className="w-16 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white font-bold text-[10px] shadow">
-                      {selectedSender?.name?.substring(0, 3).toUpperCase() || 'LOGO'}
-                    </div>
-                  )}
-                  <div className="mt-2 text-gray-600 space-y-0.5 text-[10px]">
-                    <p className="font-semibold text-gray-900">{selectedSender?.legal_name || selectedSender?.name || '—'}</p>
-                    {selectedSender?.id_code && <p>ს/კ: {selectedSender.id_code}</p>}
-                    <p>{countryDisplayName(selectedSender?.country) || 'საქართველო'}, {selectedSender?.city || 'თბილისი'}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <h2 className="text-base font-bold text-gray-900">
-                    {language === 'ka' ? 'ინვოისი' : 'INVOICE'}
-                  </h2>
-                  <p className="text-gray-600 mt-0.5">#INV-XXXXXX-XXXX</p>
-                  <p className="text-gray-500 text-[9px] mt-0.5">
-                    {language === 'ka' ? 'თარიღი' : 'Date'}: {formatDate(new Date())}
-                  </p>
-                  <p className="text-gray-500 text-[9px]">
-                    {language === 'ka' ? 'ქეისი' : 'Case'}: {selectedCase?.case_number || '—'}
-                  </p>
-                </div>
-              </div>
-              
-              {/* Recipient & Patient */}
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
-                <div>
-                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                    {language === 'ka' ? 'ადრესატი' : 'BILL TO'}
-                  </p>
-                  <p className="font-semibold text-gray-900 text-[10px]">{selectedRecipient?.legal_name || selectedRecipient?.name || '—'}</p>
-                  {selectedRecipient?.id_code && <p className="text-gray-600 text-[10px]">ს/კ: {selectedRecipient.id_code}</p>}
-                  {selectedRecipient?.address && <p className="text-gray-600 text-[10px]">{selectedRecipient.address}</p>}
-                  {(selectedRecipient?.city || selectedRecipient?.country) && (
-                    <p className="text-gray-600 text-[10px]">{[selectedRecipient.city, countryDisplayName(selectedRecipient.country)].filter(Boolean).join(', ')}</p>
+                    <div className="w-9 h-9 border border-dashed border-gray-300 rounded-full mx-auto" />
                   )}
                 </div>
-                <div>
-                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                    {language === 'ka' ? 'პაციენტი' : 'PATIENT'}
+                <div className="bg-[#1E5C82] p-1.5 flex-1 min-w-0 min-h-[48px]">
+                  <p className="text-[7px] font-bold text-white mb-1">BANK DETAILS</p>
+                  <p className="text-[7px] font-bold text-white truncate">{selectedSender?.bank_name || '—'}</p>
+                  <p className="text-[6px] text-white truncate">
+                    Account: {(currency === 'GEL' ? selectedSender?.account_gel : currency === 'USD' ? selectedSender?.account_usd : selectedSender?.account_eur) || '—'}
                   </p>
-                  <p className="font-semibold text-gray-900 text-[10px]">{selectedCase?.patient_name || '—'}</p>
-                  {selectedCase?.patient_id && <p className="text-gray-600 text-[10px]">პ/ნ: {selectedCase.patient_id}</p>}
+                  <p className="text-[6px] text-white truncate">SWIFT: {selectedSender?.bank_code || '—'}</p>
                 </div>
-              </div>
-              
-              {/* Services Mini Table */}
-              <div className="border border-gray-200 rounded overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-2 py-1 text-left text-[9px] font-semibold text-gray-500 uppercase">
-                        {language === 'ka' ? 'სერვისი' : 'SERVICE'}
-                      </th>
-                      <th className="px-2 py-1 text-right text-[9px] font-semibold text-gray-500 uppercase w-16">
-                        {language === 'ka' ? 'თანხა' : 'AMOUNT'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {services.slice(0, 4).map((s, i) => (
-                      <tr key={i}>
-                        <td className="px-2 py-1 text-gray-700 text-[10px] truncate max-w-[150px]">{s.description || '—'}</td>
-                        <td className="px-2 py-1 text-gray-900 text-right text-[10px] font-medium">{s.total?.toFixed(2)} {currencySymbol}</td>
-                      </tr>
-                    ))}
-                    {services.length > 4 && (
-                      <tr>
-                        <td colSpan={2} className="px-2 py-1 text-gray-500 text-[9px] text-center">
-                          + {services.length - 4} მეტი სერვისი...
-                        </td>
-                      </tr>
-                    )}
-                    {franchiseAmount > 0 && (
-                      <tr className="bg-red-50">
-                        <td className="px-2 py-1 text-red-700 text-[10px]">
-                          {language === 'ka' ? 'ფრანჩიზა' : 'Franchise'}
-                        </td>
-                        <td className="px-2 py-1 text-red-600 text-right text-[10px] font-medium">-{franchiseAmount.toFixed(2)} {currencySymbol}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50">
-                      <td className="px-2 py-1.5 font-semibold text-gray-700 text-[10px]">
-                        {language === 'ka' ? 'ჯამი' : 'TOTAL'}
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-bold text-blue-600 text-xs">{total.toFixed(2)} {currencySymbol}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              
-              {/* Signature & Stamp */}
-              <div className="flex justify-end items-center gap-4 pt-2">
-                {selectedSender?.signature_url ? (
-                  <div className="w-20 h-8 flex items-center justify-center">
-                    <img 
-                      src={selectedSender.signature_url} 
-                      alt="Signature" 
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-16 h-6 border border-dashed border-gray-300 rounded flex items-center justify-center text-[8px] text-gray-400">
-                    {language === 'ka' ? 'ხელმოწერა' : 'Signature'}
-                  </div>
-                )}
-                {selectedSender?.stamp_url ? (
-                  <div className="w-12 h-12 flex items-center justify-center">
-                    <img 
-                      src={selectedSender.stamp_url} 
-                      alt="Stamp" 
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 border border-dashed border-gray-300 rounded-full flex items-center justify-center text-[8px] text-gray-400">
-                    {language === 'ka' ? 'ბეჭედი' : 'Stamp'}
-                  </div>
-                )}
               </div>
             </div>
           </div>
