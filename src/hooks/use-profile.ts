@@ -22,6 +22,8 @@ export interface UserPreferences {
 export interface ProfileUpdateData {
   full_name?: string;
   phone?: string | null;
+  job_title?: string | null;
+  email_signature?: string | null;
   preferences?: Partial<UserPreferences>;
 }
 

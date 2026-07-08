@@ -24,13 +24,7 @@ IBAN: {iban}
 
 Please process this invoice within 30 days of receipt.
 
-If you have any questions regarding this invoice, please don't hesitate to contact us.
-
-Best regards,
-{senderName}
-{companyName}
-{companyEmail}
-{companyPhone}`,
+If you have any questions regarding this invoice, please don't hesitate to contact us.`,
 
   // Available variables for template replacement
   variables: [
@@ -68,8 +62,10 @@ export function applyTemplateEN(
   
   for (const [key, value] of Object.entries(variables)) {
     if (value !== undefined) {
-      // Replace both #{var} and {var} patterns
-      result = result.replace(new RegExp(`#?\\{${key}\\}`, 'g'), value);
+      // Replace both #{var} and {var} patterns. Use a function replacer so the
+      // value is inserted literally — free-form values (e.g. a signature, or the
+      // USD "$" in a total) must not be interpreted as $-replacement patterns.
+      result = result.replace(new RegExp(`#?\\{${key}\\}`, 'g'), () => value);
     }
   }
   

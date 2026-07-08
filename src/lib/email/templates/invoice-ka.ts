@@ -24,13 +24,7 @@ IBAN: {iban}
 
 გთხოვთ დაამუშავოთ ეს ინვოისი მიღებიდან 30 დღის განმავლობაში.
 
-კითხვების შემთხვევაში, გთხოვთ დაგვიკავშირდეთ.
-
-პატივისცემით,
-{senderName}
-{companyName}
-{companyEmail}
-{companyPhone}`,
+კითხვების შემთხვევაში, გთხოვთ დაგვიკავშირდეთ.`,
 
   // Available variables for template replacement
   variables: [
@@ -64,8 +58,10 @@ export function applyTemplateKA(
   
   for (const [key, value] of Object.entries(variables)) {
     if (value !== undefined) {
-      // Replace both #{var} and {var} patterns
-      result = result.replace(new RegExp(`#?\\{${key}\\}`, 'g'), value);
+      // Replace both #{var} and {var} patterns. Use a function replacer so the
+      // value is inserted literally — free-form values (e.g. a signature, or the
+      // USD "$" in a total) must not be interpreted as $-replacement patterns.
+      result = result.replace(new RegExp(`#?\\{${key}\\}`, 'g'), () => value);
     }
   }
   

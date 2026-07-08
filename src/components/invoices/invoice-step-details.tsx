@@ -66,12 +66,13 @@ const languages: { value: InvoiceLanguage; label: string }[] = [
   { value: 'ka', label: 'ქართული' },
 ];
 
-// Email templates by language
+// Email templates by language. Message body only — the case-manager sign-off is
+// appended automatically at send time (see src/lib/email/send.ts), so it must
+// not be baked into the saved body here.
 const getEmailTemplate = (
   language: InvoiceLanguage,
   caseNumber?: string,
-  patientName?: string,
-  senderName?: string
+  patientName?: string
 ) => {
   if (language === 'ka') {
     return {
@@ -80,10 +81,7 @@ const getEmailTemplate = (
 
 გიგზავნით ინვოისს ქეისის #${caseNumber || 'XXXX'} თაობაზე.
 
-პაციენტი: ${patientName || '—'}
-
-პატივისცემით,
-${senderName || 'GeoAdmin'}`
+პაციენტი: ${patientName || '—'}`
     };
   }
   return {
@@ -92,10 +90,7 @@ ${senderName || 'GeoAdmin'}`
 
 Please find attached the invoice for case #${caseNumber || 'XXXX'}.
 
-Patient: ${patientName || '—'}
-
-Best regards,
-${senderName || 'GeoAdmin'}`
+Patient: ${patientName || '—'}`
   };
 };
 
@@ -141,13 +136,12 @@ export function InvoiceStepDetails({
     const template = getEmailTemplate(
       language,
       selectedCase?.case_number,
-      selectedCase?.patient_name,
-      selectedSender?.name
+      selectedCase?.patient_name
     );
     onEmailSubjectChange(template.subject);
     onEmailBodyChange(template.body);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, selectedCase?.case_number, selectedCase?.patient_name, selectedSender?.name]);
+  }, [language, selectedCase?.case_number, selectedCase?.patient_name]);
 
   // Attachment info
   const hasAttachments = attachPatientDocs || attachOriginalDocs || attachMedicalDocs;

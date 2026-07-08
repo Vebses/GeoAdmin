@@ -18,6 +18,8 @@ export type Database = {
           is_active: boolean;
           avatar_url: string | null;
           phone: string | null;
+          job_title: string | null;
+          email_signature: string | null;
           preferences: Json;
           last_login_at: string | null;
           created_at: string;
@@ -31,6 +33,8 @@ export type Database = {
           is_active?: boolean;
           avatar_url?: string | null;
           phone?: string | null;
+          job_title?: string | null;
+          email_signature?: string | null;
           preferences?: Json;
           last_login_at?: string | null;
           created_at?: string;
@@ -44,6 +48,8 @@ export type Database = {
           is_active?: boolean;
           avatar_url?: string | null;
           phone?: string | null;
+          job_title?: string | null;
+          email_signature?: string | null;
           preferences?: Json;
           last_login_at?: string | null;
           created_at?: string;

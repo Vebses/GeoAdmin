@@ -8,6 +8,8 @@ interface EmailPreviewData {
   cc?: string[];
   subject: string;
   body: string;
+  /** Case-manager sign-off appended at the bottom of the email at send time. */
+  signature?: string;
   attachments?: Array<{ name: string; type: string }>;
 }
 
@@ -67,6 +69,12 @@ export function InvoiceEmailPreview({ data, className }: InvoiceEmailPreviewProp
         <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
           {data.body}
         </pre>
+        {/* Case-manager sign-off, appended at send time */}
+        {data.signature && (
+          <pre className="mt-4 pt-3 border-t border-dashed border-gray-200 text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+            {data.signature}
+          </pre>
+        )}
       </div>
       
       {/* Attachments */}

@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InvoiceEmailPreview } from './invoice-email-preview';
+import { stripTrailingSignOff } from '@/lib/email/signature';
+import { sanitizeBodyText } from '@/lib/email/sanitize';
 import { toast } from 'sonner';
 import type { InvoiceWithRelations } from '@/types';
 
@@ -48,6 +50,7 @@ export function InvoiceSendDialog({
     cc?: string[];
     subject: string;
     body: string;
+    signature?: string;
     attachments?: Array<{ name: string; type: string }>;
   } | null>(null);
 
@@ -125,7 +128,16 @@ export function InvoiceSendDialog({
     }
   };
 
-  // Current preview data (with form overrides)
+  // Current preview data (with form overrides). Resolve the message body through
+  // the exact same transforms the send path applies — trim (handleSend sends
+  // body.trim()), sanitizeBodyText (server), then stripTrailingSignOff before the
+  // manager signature is appended — so the preview shows byte-for-byte what will
+  // be sent. When the textarea is empty, fall back to the (already-stripped)
+  // default body, mirroring the server's email_body/default fallback.
+  const trimmedBody = body.trim();
+  const previewBody = trimmedBody
+    ? stripTrailingSignOff(sanitizeBodyText(trimmedBody))
+    : previewData?.body ?? '';
   const currentPreview = previewData
     ? {
         ...previewData,
@@ -135,7 +147,7 @@ export function InvoiceSendDialog({
           .map((e) => e.trim())
           .filter(Boolean),
         subject: subject || previewData.subject,
-        body: body || previewData.body,
+        body: previewBody,
       }
     : null;
 
@@ -215,6 +227,16 @@ export function InvoiceSendDialog({
                   className="text-sm resize-none"
                 />
               </div>
+
+              {/* Case-manager signature — appended automatically at the bottom */}
+              {previewData?.signature && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-gray-500">ხელმოწერა (ავტომატურად დაემატება ბოლოში)</Label>
+                  <pre className="rounded-md border border-dashed border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed">
+                    {previewData.signature}
+                  </pre>
+                </div>
+              )}
 
               {/* Document Attachments */}
               <div className="space-y-2">

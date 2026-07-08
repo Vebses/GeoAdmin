@@ -56,7 +56,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate input
-    const { full_name, phone, preferences } = body;
+    const { full_name, phone, job_title, email_signature, preferences } = body;
 
     if (full_name !== undefined && (typeof full_name !== 'string' || full_name.length < 2)) {
       return NextResponse.json(
@@ -65,11 +65,29 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    if (job_title !== undefined && job_title !== null && (typeof job_title !== 'string' || job_title.length > 100)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Job title must be 100 characters or fewer' } },
+        { status: 400 }
+      );
+    }
+
+    if (email_signature !== undefined && email_signature !== null && (typeof email_signature !== 'string' || email_signature.length > 2000)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Signature must be 2000 characters or fewer' } },
+        { status: 400 }
+      );
+    }
+
     // Build update object
     const updateData: Record<string, unknown> = {};
-    
+
     if (full_name !== undefined) updateData.full_name = full_name;
     if (phone !== undefined) updateData.phone = phone;
+    // Normalise blank strings to NULL so an empty signature/title falls back to
+    // the auto-composed default rather than persisting an empty override.
+    if (job_title !== undefined) updateData.job_title = (typeof job_title === 'string' && job_title.trim() === '') ? null : job_title;
+    if (email_signature !== undefined) updateData.email_signature = (typeof email_signature === 'string' && email_signature.trim() === '') ? null : email_signature;
     if (preferences !== undefined) updateData.preferences = preferences;
 
     // Update user
