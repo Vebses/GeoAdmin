@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 import { invoiceEmailTemplateEN, applyTemplateEN } from './templates/invoice-en';
 import { invoiceEmailTemplateKA, applyTemplateKA } from './templates/invoice-ka';
-import { buildManagerSignature, stripTrailingSignOff, SIGN_OFF_LABELS } from './signature';
+import { buildManagerSignature, stripTrailingSignOff } from './signature';
 import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage, CurrencyCode } from '@/types';
 
 // Initialize Resend client
@@ -113,21 +113,20 @@ function prepareVariables(
 }
 
 /**
- * Build the sign-off block appended to the bottom of an invoice email.
+ * Build the sign-off block appended to the bottom of an invoice email:
+ * <case manager full name> / <position> / <company block>.
  *
- * The signature is resolved at SEND/PREVIEW time from the case's currently
- * assigned manager (cases.assigned_to), so it always reflects who manages the
- * case now — never a value frozen into a saved email body. Falls back to the
- * company sign-off when the case has no manager.
+ * Resolved at SEND/PREVIEW time from the case's currently assigned manager
+ * (cases.assigned_to) and the sender company's signature template, so it always
+ * reflects who manages the case now — never a value frozen into a saved body.
+ * No "Best regards," lead line: the block matches the company's signature
+ * verbatim. Falls back to the company block alone when the case has no manager.
  */
 export function buildEmailSignOff(
   sender: OurCompany,
   caseData: CaseWithRelations,
-  language: InvoiceLanguage,
 ): string {
-  const label = SIGN_OFF_LABELS[language] || SIGN_OFF_LABELS.en;
-  const signature = buildManagerSignature(caseData.assigned_user ?? null, sender);
-  return signature ? `${label},\n${signature}` : `${label},`;
+  return buildManagerSignature(caseData.assigned_user ?? null, sender);
 }
 
 /**
@@ -181,9 +180,8 @@ export async function sendInvoiceEmail({
     // Append the case-manager sign-off as a footer, resolved fresh at send time.
     // Bodies (default template, wizard, user-edited) carry only the message; the
     // signature is never baked into a saved body, so it can't go stale.
-    const language = (invoice.language as InvoiceLanguage) || 'en';
-    const signOff = buildEmailSignOff(sender, caseData, language);
-    const emailBody = `${messageBody}\n\n${signOff}`;
+    const signOff = buildEmailSignOff(sender, caseData);
+    const emailBody = signOff ? `${messageBody}\n\n${signOff}` : messageBody;
 
     // Prepare recipient email
     const recipientEmail = to || invoice.recipient_email || recipient.email;

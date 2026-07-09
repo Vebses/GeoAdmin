@@ -56,7 +56,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         *,
         sender:our_companies(*),
         recipient:partners(*),
-        case:cases(*, assigned_user:users!cases_assigned_to_fkey(id, full_name, email, phone, job_title, email_signature)),
+        case:cases(*, assigned_user:users!cases_assigned_to_fkey(id, full_name, job_title)),
         creator:users!invoices_created_by_fkey(id, full_name),
         services:invoice_services(*),
         sends:invoice_sends(*)

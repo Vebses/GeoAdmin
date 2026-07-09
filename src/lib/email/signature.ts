@@ -8,65 +8,67 @@
 // embed exactly these columns off cases.assigned_to.
 export interface SignatureManager {
   full_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
   job_title?: string | null;
-  email_signature?: string | null;
 }
 
-// Subset of the our_companies row used for the company footer / legacy fallback.
+// Subset of the our_companies row used for the company block.
 export interface SignatureCompany {
   name?: string | null;
   legal_name?: string | null;
   email?: string | null;
   phone?: string | null;
+  // Free-form per-company signature block (address, E-mail/Tel/Mobile lines, …),
+  // edited in Company settings.
+  email_signature?: string | null;
 }
 
 /**
- * Build the sign-off block that closes an invoice email.
+ * The company block that closes the signature — the sender company's details.
+ * Prefers the free-form per-company template (`our_companies.email_signature`);
+ * falls back to auto-composing from the structured fields when it isn't set.
+ */
+function resolveCompanyBlock(company: SignatureCompany | null | undefined): string {
+  const template = company?.email_signature?.trim();
+  if (template) return template;
+
+  // Fallback: legal/short name, email, phone.
+  const companyName = company?.legal_name?.trim() || company?.name?.trim() || '';
+  const lines: string[] = [];
+  if (companyName) lines.push(companyName);
+  const email = company?.email?.trim();
+  if (email) lines.push(email);
+  const phone = company?.phone?.trim();
+  if (phone) lines.push(phone);
+  return lines.join('\n');
+}
+
+/**
+ * Build the sign-off block that closes an invoice email:
  *
- * Priority:
- *   1. manager.email_signature (free-form) — used verbatim; the manager fully
- *      controls the wording, so nothing is appended.
- *   2. auto-composed from the manager's name / job title / phone / email,
- *      followed by the company name.
- *   3. no manager assigned — fall back to the company sign-off (the legacy
- *      behaviour: company name, legal name, email, phone).
+ *   <case manager full name>   ← dynamic, per assigned manager
+ *   <case manager position>    ← dynamic (users.job_title)
+ *   <company block>            ← per-company template (our_companies.email_signature)
+ *
+ * When the case has no assigned manager, only the company block is returned.
  */
 export function buildManagerSignature(
   manager: SignatureManager | null | undefined,
   company: SignatureCompany | null | undefined,
 ): string {
-  const companyName = company?.legal_name?.trim() || company?.name?.trim() || '';
+  const companyBlock = resolveCompanyBlock(company);
 
-  // 1. Free-form override — verbatim, fully manager-controlled.
-  const custom = manager?.email_signature?.trim();
-  if (custom) return custom;
-
-  // 2. Auto-compose from the manager's profile, then the company name line.
+  // Manager present: name + position on top, then the company block.
   const managerName = manager?.full_name?.trim();
   if (managerName) {
     const lines: string[] = [managerName];
     const title = manager?.job_title?.trim();
     if (title) lines.push(title);
-    const phone = manager?.phone?.trim();
-    if (phone) lines.push(phone);
-    const email = manager?.email?.trim();
-    if (email) lines.push(email);
-    if (companyName) lines.push(companyName);
+    if (companyBlock) lines.push(companyBlock);
     return lines.join('\n');
   }
 
-  // 3. No manager on the case — legacy company sign-off.
-  const senderName = company?.name?.trim();
-  const lines: string[] = [];
-  if (senderName) lines.push(senderName);
-  if (companyName && companyName !== senderName) lines.push(companyName);
-  const companyEmail = company?.email?.trim();
-  if (companyEmail) lines.push(companyEmail);
-  const companyPhone = company?.phone?.trim();
-  if (companyPhone) lines.push(companyPhone);
-  return lines.join('\n');
+  // No manager on the case — just the company block.
+  return companyBlock;
 }
 
 // Sign-off label per language ("Best regards," / "პატივისცემით,"). Lives here

@@ -183,6 +183,7 @@ export const ourCompanySchema = z.object({
   stamp_url: z.string().url().optional().nullable().or(z.literal('')),
   invoice_prefix: z.string().max(10).default('INV'),
   invoice_footer_text: z.string().max(1000).optional().nullable(),
+  email_signature: z.string().max(2000, 'ხელმოწერა ძალიან გრძელია').optional().nullable(),
   is_default: z.boolean().default(false),
 });
 

@@ -197,6 +197,7 @@ export function CompanyEditPanel({
       stamp_url: '',
       invoice_prefix: 'INV',
       invoice_footer_text: '',
+      email_signature: '',
       is_default: false,
     },
   });
@@ -226,6 +227,7 @@ export function CompanyEditPanel({
           stamp_url: company.stamp_url || '',
           invoice_prefix: company.invoice_prefix || 'INV',
           invoice_footer_text: company.invoice_footer_text || '',
+          email_signature: company.email_signature || '',
           is_default: company.is_default || false,
         });
         setLogoUrl(company.logo_url || null);
@@ -252,6 +254,7 @@ export function CompanyEditPanel({
           stamp_url: '',
           invoice_prefix: 'INV',
           invoice_footer_text: '',
+          email_signature: '',
           is_default: false,
         });
         setLogoUrl(null);
@@ -572,6 +575,28 @@ export function CompanyEditPanel({
                 rows={3}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Email signature (invoice emails) */}
+        <div>
+          <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+            ინვოისის ელ-ფოსტის ხელმოწერა
+          </h3>
+          <div className="space-y-1.5">
+            <Label htmlFor="email_signature">კომპანიის ბლოკი ხელმოწერაში</Label>
+            <p className="text-[11px] text-gray-400">
+              ჩნდება გაგზავნილი ინვოისის ელ-ფოსტის ბოლოში. ზემოთ ავტომატურად დაემატება ქეის-მენეჯერის სახელი და თანამდებობა.
+            </p>
+            <Textarea
+              id="email_signature"
+              {...register('email_signature')}
+              rows={6}
+              placeholder={`Geoassistance\nGeorgia, Tbilisi, 13 D.Gamrekeli Str.\nE-mail: info@geoassistance.ge\nTel: (+995 322) 12 00 33\nMobile: (+995 599) 15 69 69;`}
+            />
+            {errors.email_signature && (
+              <p className="text-xs text-red-500">{errors.email_signature.message}</p>
+            )}
           </div>
         </div>
       </form>

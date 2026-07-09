@@ -178,6 +178,7 @@ export type Database = {
           stamp_url: string | null;
           invoice_prefix: string;
           invoice_footer_text: string | null;
+          email_signature: string | null;
           is_default: boolean;
           created_at: string;
           updated_at: string;
@@ -204,6 +205,7 @@ export type Database = {
           stamp_url?: string | null;
           invoice_prefix?: string;
           invoice_footer_text?: string | null;
+          email_signature?: string | null;
           is_default?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -230,6 +232,7 @@ export type Database = {
           stamp_url?: string | null;
           invoice_prefix?: string;
           invoice_footer_text?: string | null;
+          email_signature?: string | null;
           is_default?: boolean;
           created_at?: string;
           updated_at?: string;
