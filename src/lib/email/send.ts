@@ -96,7 +96,9 @@ function prepareVariables(
     invoiceNumber: invoice.invoice_number,
     caseNumber: caseData.case_number,
     patientName: caseData.patient_name,
-    invoiceDate: formatDate(invoice.created_at, language),
+    // The invoice/service date is the case opening date, not when the invoice
+    // row was created in the system.
+    invoiceDate: formatDate(caseData.opened_at || invoice.created_at, language),
     subtotal: formatCurrency(subtotal, currency),
     franchise: franchise > 0 ? formatCurrency(franchise, currency) : '-',
     total: formatCurrency(total, currency),

@@ -675,7 +675,7 @@ export function InvoicePDF({
               <View style={styles.detailRow}>
                 <CalendarIcon />
                 <Text style={styles.detailLabel}>Date</Text>
-                <Text style={styles.detailValue}>{formatDate(invoice.created_at)}</Text>
+                <Text style={styles.detailValue}>{formatDate(caseData.opened_at || invoice.created_at)}</Text>
               </View>
               <View style={styles.detailRow}>
                 <CalendarIcon />
