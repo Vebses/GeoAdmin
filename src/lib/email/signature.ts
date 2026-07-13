@@ -71,20 +71,25 @@ export function buildManagerSignature(
   return companyBlock;
 }
 
-// Sign-off label per language ("Best regards," / "პატივისცემით,"). Lives here
-// (dependency-free) so both the server (send.ts) and client (send dialog
-// preview) can share the same strip logic.
+// Closing line prepended above the signature, per language
+// ("Kind regards," / "პატივისცემით,"). Lives here (dependency-free) so both the
+// server (send.ts) and client (send-dialog preview) can share it.
 export const SIGN_OFF_LABELS: Record<string, string> = {
-  en: 'Best regards',
+  en: 'Kind regards',
   ka: 'პატივისცემით',
 };
+
+// Every closing label recognised when stripping a trailing sign-off from a
+// legacy or user-edited body. Includes historical "Best regards" so bodies saved
+// before we switched to "Kind regards" are still cleaned.
+const STRIP_SIGN_OFF_LABELS = ['Kind regards', 'Best regards', 'პატივისცემით'];
 
 /**
  * Strip a trailing sign-off block from a message body before the fresh
  * case-manager sign-off is appended.
  *
  * Message bodies are signature-free by design, but invoices saved before this
- * feature (and the old wizard template) baked a "Best regards, <company>" block
+ * feature (and the old wizard template) baked a "<closing>, <company>" block
  * into email_body. Without this, sending such an invoice would show two
  * sign-offs. Conservative on purpose: only cuts from the LAST line that is
  * exactly a known sign-off label, and only when the tail is a short block (a
@@ -93,7 +98,7 @@ export const SIGN_OFF_LABELS: Record<string, string> = {
  * always matches what is actually sent.
  */
 export function stripTrailingSignOff(body: string): string {
-  const labelLine = new Set(Object.values(SIGN_OFF_LABELS).map(l => `${l},`));
+  const labelLine = new Set(STRIP_SIGN_OFF_LABELS.map(l => `${l},`));
   const lines = body.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     if (labelLine.has(lines[i].trim())) {

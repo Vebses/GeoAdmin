@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getDefaultEmailContent, buildEmailSignOff, stripTrailingSignOff } from '@/lib/email';
 import { canAccessInvoice } from '@/lib/case-access';
-import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations } from '@/types';
+import type { InvoiceWithRelations, OurCompany, Partner, CaseWithRelations, InvoiceLanguage } from '@/types';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -68,7 +68,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // The case-manager sign-off is appended to the bottom of the email at send
     // time; surface it so the preview mirrors exactly what will be sent.
-    const signOff = buildEmailSignOff(typedInvoice.sender, typedInvoice.case);
+    const signOff = buildEmailSignOff(
+      typedInvoice.sender,
+      typedInvoice.case,
+      (typedInvoice.language || 'en') as InvoiceLanguage
+    );
 
     // Build attachments list
     const attachments = [
